@@ -1,0 +1,11 @@
+.env
+__pycache__/
+lib/
+.DS_Store
+
+# corpus baixado pelos scripts (crawl_wayback.py, baixar_cvm.py) — reproduzível, não versionar
+data/corpus/
+data/pdfs/
+data/cvm/
+data/corpus_pdf/
+data/knowledge/
