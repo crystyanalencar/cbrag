@@ -66,10 +66,34 @@ class IngestFlow(Flow[IngestState]):
 
     @listen(preparar_corpus)
     def embutir_conhecimento(self):
-        from casas_bahia_rag.main import rag_agent
+        from crewai.knowledge.knowledge import Knowledge
+        from crewai.knowledge.source.text_file_knowledge_source import (
+            TextFileKnowledgeSource,
+        )
 
-        agent = rag_agent()  # constrói o Agent e dispara set_knowledge() (embedding)
-        self.state.knowledge_pronto = agent.knowledge is not None
+        from casas_bahia_rag import knowledge_config as kc
+
+        if kc.ja_embedado():
+            print(f"Já embedado antes (marcador em {kc.MARKER_FILE}), pulando.")
+            self.state.knowledge_pronto = True
+            return
+
+        kc.configurar_rag()
+        arquivos = sorted(kc.KNOWLEDGE_DIR.glob("*.txt"))
+        source = TextFileKnowledgeSource(
+            file_paths=arquivos,
+            chunk_size=kc.CHUNK_SIZE,
+            chunk_overlap=kc.CHUNK_OVERLAP,
+        )
+        # embedder=None: usa o cliente global (Ollama + data/knowledge_storage/)
+        # já configurado por kc.configurar_rag(), em vez de criar um cliente
+        # próprio com storage fora do repo (comportamento padrão do CrewAI).
+        knowledge = Knowledge(
+            collection_name=kc.COLLECTION_NAME, sources=[source], embedder=None
+        )
+        knowledge.add_sources()
+        kc.marcar_embedado()
+        self.state.knowledge_pronto = True
 
 
 def kickoff():

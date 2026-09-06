@@ -1,71 +1,30 @@
 #!/usr/bin/env python
 """Chatbot RAG conversacional sobre a Grupo Casas Bahia (institucional +
-RI + financeiro/CVM), usando um único Agent com knowledge_sources sobre
-data/knowledge/ e LLM local via Ollama.
+RI + financeiro/CVM). Só faz retrieval (Chroma já embedado pelo
+IngestFlow, ver knowledge_config.py) + geração via LLM local Ollama.
 
-Retrieval é feito manualmente (agent.knowledge.query) em vez de deixar o
-CrewAI recuperar sozinho, porque a recuperação automática só existe no
-caminho Agent.execute_task()/Crew — Agent.kickoff() standalone (o usado
-aqui dentro do Flow conversacional) não consulta knowledge nenhum. E o
-Agent é construído uma única vez (módulo cacheia a instância): reconstruir
-o Agent a cada turno chamaria set_knowledge() de novo, que re-chunka e
-re-embeda os 732 arquivos via Ollama a cada pergunta do usuário.
+Retrieval é feito manualmente (knowledge_config.buscar_contexto) em vez de
+deixar o CrewAI recuperar sozinho, porque a recuperação automática só
+existe no caminho Agent.execute_task()/Crew — Agent.kickoff() standalone
+(o usado aqui dentro do Flow conversacional) não consulta knowledge nenhum.
 """
-from pathlib import Path
-
 from crewai import Agent, Flow
 from crewai.flow.conversational import ConversationConfig, ConversationState
 from crewai.flow.flow import listen
-from crewai.knowledge.source.text_file_knowledge_source import TextFileKnowledgeSource
 
-ROOT = Path(__file__).resolve().parents[2]
-KNOWLEDGE_DIR = ROOT / "data" / "knowledge"
-
-# > o intervalo de repetição do cabeçalho [Fonte: ... | Data: ...] injetado
-# por scripts/preparar_knowledge.py (800 caracteres), senão um chunk pode
-# cair inteiro entre dois cabeçalhos e perder a origem/data.
-CHUNK_SIZE = 2000
-CHUNK_OVERLAP = 200
-RESULTS_LIMIT = 8
-SCORE_THRESHOLD = 0.35
-
-OLLAMA_LLM = "ollama/gemma4:e4b"
-OLLAMA_EMBEDDER = {
-    "provider": "ollama",
-    "config": {
-        "model_name": "nomic-embed-text",
-        "url": "http://localhost:11434/api/embeddings",
-    },
-}
+from casas_bahia_rag.knowledge_config import OLLAMA_LLM, buscar_contexto
 
 _agent: Agent | None = None
 
 
-def _knowledge_sources() -> list[TextFileKnowledgeSource]:
-    # Path objects (não str) evitam o prefixo automático "knowledge/" que o
-    # CrewAI aplica a paths string (convenção pra pasta knowledge/ na raiz
-    # do projeto, que não é onde guardamos nosso corpus).
-    arquivos = sorted(KNOWLEDGE_DIR.glob("*.txt"))
-    if not arquivos:
-        raise RuntimeError(
-            f"Nenhum arquivo em {KNOWLEDGE_DIR} — rode o IngestFlow primeiro (uv run ingest)."
-        )
-    return [
-        TextFileKnowledgeSource(
-            file_paths=arquivos,
-            chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP,
-        )
-    ]
-
-
 def rag_agent() -> Agent:
-    """Constrói o Agent uma única vez por processo (embedding é caro)."""
+    """Constrói o Agent de geração uma única vez por processo (sem knowledge
+    embutido — retrieval é manual, ver _montar_prompt)."""
     global _agent
     if _agent is not None:
         return _agent
 
-    agent = Agent(
+    _agent = Agent(
         role="Especialista em Relações com Investidores e Institucional da Grupo Casas Bahia",
         goal=(
             "Responder perguntas sobre a Grupo Casas Bahia (institucional, "
@@ -84,26 +43,15 @@ def rag_agent() -> Agent:
             "resposta, diga isso claramente em vez de inventar."
         ),
         llm=OLLAMA_LLM,
-        knowledge_sources=_knowledge_sources(),
-        embedder=OLLAMA_EMBEDDER,
     )
-    agent.set_knowledge()  # dispara o chunking+embedding (uma vez só)
-    _agent = agent
-    return agent
+    return _agent
 
 
 def _montar_prompt(pergunta: str) -> str:
-    agent = rag_agent()
-    if agent.knowledge is None:
+    chunks = buscar_contexto(pergunta)
+    if not chunks:
         return pergunta
-
-    resultados = agent.knowledge.query(
-        [pergunta], results_limit=RESULTS_LIMIT, score_threshold=SCORE_THRESHOLD
-    )
-    if not resultados:
-        return pergunta
-
-    contexto = "\n\n---\n\n".join(r["content"] for r in resultados)
+    contexto = "\n\n---\n\n".join(chunks)
     return (
         f"Contexto recuperado da base de conhecimento:\n\n{contexto}\n\n"
         f"Pergunta do usuário: {pergunta}"

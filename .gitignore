@@ -9,3 +9,7 @@ data/pdfs/
 data/cvm/
 data/corpus_pdf/
 data/knowledge/
+
+# banco vetorial (Chroma) — binário, não versionar no git; pra portar pra
+# outra máquina sem reprocessar (~2h30 de embedding), copiar a pasta na mão
+data/knowledge_storage/
