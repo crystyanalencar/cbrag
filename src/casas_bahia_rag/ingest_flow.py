@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import baixar_cvm  # noqa: E402
+import baixar_dfp_itr  # noqa: E402
 import crawl_wayback  # noqa: E402
 import extrair_texto_pdfs  # noqa: E402
 import preparar_knowledge  # noqa: E402
@@ -31,6 +32,7 @@ class IngestState(BaseModel):
     pdfs_falhas: int = 0
     cvm_salvos: int = 0
     cvm_falhas: int = 0
+    dre_linhas: int = 0
     pdf_extraidos: int = 0
     pdf_pulados: int = 0
     pdf_falhas: int = 0
@@ -42,7 +44,15 @@ class IngestState(BaseModel):
 class IngestFlow(Flow[IngestState]):
     @start()
     def coletar_wayback(self):
-        resultado = crawl_wayback.main()
+        # Não-bloqueante: Wayback já se mostrou instável (web.archive.org
+        # fora do ar trava o crawl inteiro) e rende pouco valor pro chatbot
+        # comparado ao CVM (ver STATE.md) — falha aqui não deve impedir as
+        # etapas seguintes de rodar com o que já existe em data/corpus/.
+        try:
+            resultado = crawl_wayback.main()
+        except Exception as e:
+            print(f"coletar_wayback falhou, seguindo sem bloquear: {e}")
+            return
         for chave, valor in resultado.items():
             setattr(self.state, chave, valor)
 
@@ -53,6 +63,17 @@ class IngestFlow(Flow[IngestState]):
             setattr(self.state, chave, valor)
 
     @listen(coletar_cvm)
+    def coletar_dre_estruturada(self):
+        # DRE estruturada (dados.cvm.gov.br, dataset ITR/DFP) em paralelo
+        # aos PDFs de "dados econômico-financeiros" já baixados por
+        # coletar_cvm — mesma informação, mas com DT_INI_EXERC/DT_FIM_EXERC
+        # exatos por linha, sem ambiguidade de coluna que a extração de
+        # texto do PDF não resolve (ver dados_financeiros.py, STATE.md).
+        resultado = baixar_dfp_itr.main()
+        for chave, valor in resultado.items():
+            setattr(self.state, chave, valor)
+
+    @listen(coletar_dre_estruturada)
     def extrair_pdfs(self):
         resultado = extrair_texto_pdfs.main()
         for chave, valor in resultado.items():
@@ -66,33 +87,47 @@ class IngestFlow(Flow[IngestState]):
 
     @listen(preparar_corpus)
     def embutir_conhecimento(self):
-        from crewai.knowledge.knowledge import Knowledge
-        from crewai.knowledge.source.text_file_knowledge_source import (
-            TextFileKnowledgeSource,
-        )
+        # Bypassa Knowledge/TextFileKnowledgeSource: essa API de alto nível
+        # não repassa metadata pro storage (campo "Currently unused" na lib
+        # instalada, ver STATE.md), o que impedia filtrar/ordenar por
+        # categoria e data de verdade na busca. Escreve direto no
+        # ChromaDBClient (kc.cliente_rag()), que suporta metadata nativa.
+        import os
 
         from casas_bahia_rag import knowledge_config as kc
 
-        if kc.ja_embedado():
-            print(f"Já embedado antes (marcador em {kc.MARKER_FILE}), pulando.")
+        cliente = kc.cliente_rag()
+        arquivos = sorted(kc.KNOWLEDGE_DIR.glob("*.txt"))
+        pendentes = kc.arquivos_pendentes(arquivos)
+        if not pendentes:
+            print("Nada novo pra embedar (manifesto já cobre todos os arquivos).")
             self.state.knowledge_pronto = True
             return
 
-        kc.configurar_rag()
-        arquivos = sorted(kc.KNOWLEDGE_DIR.glob("*.txt"))
-        source = TextFileKnowledgeSource(
-            file_paths=arquivos,
-            chunk_size=kc.CHUNK_SIZE,
-            chunk_overlap=kc.CHUNK_OVERLAP,
+        # ANO_MINIMO permite embedar em fases (ex.: ANO_MINIMO=2026 só
+        # processa o ano mais recente pra testar rápido; rodar de novo sem
+        # a variável faz o backfill do resto — upsert idempotente, sem
+        # duplicar). Sempre processa do mais recente pro mais antigo, com
+        # ou sem corte.
+        ano_minimo = os.environ.get("ANO_MINIMO")
+        pendentes = kc.ordenar_por_recencia(
+            pendentes, ano_minimo=int(ano_minimo) if ano_minimo else None
         )
-        # embedder=None: usa o cliente global (Ollama + data/knowledge_storage/)
-        # já configurado por kc.configurar_rag(), em vez de criar um cliente
-        # próprio com storage fora do repo (comportamento padrão do CrewAI).
-        knowledge = Knowledge(
-            collection_name=kc.COLLECTION_NAME, sources=[source], embedder=None
-        )
-        knowledge.add_sources()
-        kc.marcar_embedado()
+        if not pendentes:
+            print(f"Nada pendente a partir de ANO_MINIMO={ano_minimo}.")
+            self.state.knowledge_pronto = True
+            return
+
+        print(f"{len(pendentes)} arquivo(s) novo(s)/mudado(s) pra embedar.")
+        for caminho in pendentes:
+            documentos = kc.montar_documentos(caminho)
+            if not documentos:
+                continue
+            cliente.add_documents(
+                collection_name=kc.COLLECTION_NAME, documents=documentos
+            )
+            kc.atualizar_manifesto([caminho], n_chunks={caminho.name: len(documentos)})
+            print(f"  {caminho.name}: {len(documentos)} chunks embedados")
         self.state.knowledge_pronto = True
 
 

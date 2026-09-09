@@ -33,6 +33,12 @@ def deve_pular(caminho: Path) -> bool:
     return bool(CATEGORIAS_EXCLUIDAS.match(caminho.name))
 
 
+# Testado com pdfplumber (detecção por linha e por texto) na tabela de DRE
+# real de um release CVM: a tabela não tem grade visível no PDF, então
+# detecção por linha não acha a área e detecção por texto junta a página
+# inteira (prosa incluída) numa "tabela" só, fragmentando frase em palavra
+# solta — piorava o texto em vez de melhorar. Mitigação ficou pro prompt do
+# agente (main.py), não na extração — ver STATE.md.
 def extrair_texto(caminho: Path) -> str:
     leitor = PdfReader(caminho)
     paginas = [pagina.extract_text() or "" for pagina in leitor.pages]

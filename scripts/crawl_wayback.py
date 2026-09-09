@@ -19,6 +19,12 @@ PDF_DIR = ROOT / "data/pdfs"
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; casas-bahia-rag-crawler/1.0)"}
 MIN_TEXT_LEN = 200
 TENTATIVAS = 4
+# Circuit breaker: falha de conexão/timeout consecutiva (não 404/vazio)
+# indica o site inteiro fora do ar, não uma URL específica ruim — sem isso,
+# um web.archive.org indisponível faz o crawl esgotar TENTATIVAS pra cada
+# uma das ~3300 URLs do CDX antes de desistir (já aconteceu numa sessão
+# anterior). Aborta cedo e deixa pendente pra próxima rodada.
+FALHAS_CONSECUTIVAS_LIMITE = 8
 
 # Widgets de consentimento de cookie não são pegos pelos seletores de tag
 # removidos em extrair_texto() (não ficam dentro de <footer>) e sempre
@@ -89,7 +95,7 @@ def extrair_texto(html: str) -> str:
 
 def baixar_paginas(html_entries):
     CORPUS_DIR.mkdir(parents=True, exist_ok=True)
-    salvos, pulados, falhas = 0, 0, 0
+    salvos, pulados, falhas, falhas_seguidas = 0, 0, 0, 0
     for timestamp, original in html_entries:
         destino = CORPUS_DIR / nome_arquivo(original, "txt")
         if destino.exists():
@@ -101,7 +107,16 @@ def baixar_paginas(html_entries):
         except requests.RequestException as e:
             print(f"FALHA {original}: {e}")
             falhas += 1
+            falhas_seguidas += 1
+            if falhas_seguidas >= FALHAS_CONSECUTIVAS_LIMITE:
+                print(
+                    f"{falhas_seguidas} falhas de conexão seguidas — "
+                    "web.archive.org parece fora do ar. Abortando cedo, "
+                    "resto fica pendente pra próxima rodada."
+                )
+                break
             continue
+        falhas_seguidas = 0
         texto = extrair_texto(resp.text)
         if len(texto) < MIN_TEXT_LEN:
             pulados += 1
@@ -115,7 +130,7 @@ def baixar_paginas(html_entries):
 
 def baixar_pdfs(pdf_entries):
     PDF_DIR.mkdir(parents=True, exist_ok=True)
-    salvos, falhas = 0, 0
+    salvos, falhas, falhas_seguidas = 0, 0, 0
     for timestamp, original in pdf_entries:
         destino = PDF_DIR / nome_arquivo(original, "pdf")
         if destino.exists():
@@ -127,7 +142,16 @@ def baixar_pdfs(pdf_entries):
         except requests.RequestException as e:
             print(f"FALHA {original}: {e}")
             falhas += 1
+            falhas_seguidas += 1
+            if falhas_seguidas >= FALHAS_CONSECUTIVAS_LIMITE:
+                print(
+                    f"{falhas_seguidas} falhas de conexão seguidas — "
+                    "web.archive.org parece fora do ar. Abortando cedo, "
+                    "resto fica pendente pra próxima rodada."
+                )
+                break
             continue
+        falhas_seguidas = 0
         destino.write_bytes(resp.content)
         salvos += 1
         time.sleep(0.3)
