@@ -74,6 +74,13 @@ OLLAMA_LLM = "ollama/gemma4:e4b"
 # RPD vs 10 RPM/250 RPD do 2.5 Flash) — resolve os 429 de cota diária
 # batidos em sessão anterior.
 GEMINI_LLM = "gemini/gemini-3.1-flash-lite"
+# Fallback pro 503 (sobrecarga)/429 (cota diária) do Gemini — via litellm
+# (`uv add "crewai[litellm]"`), lê GROQ_API_KEY do .env. Modelo escolhido:
+# "llama-3.3-70b-versatile" e "llama-3.1-8b-instant" (nomes mais comuns)
+# davam 404 nessa conta/key ("does not exist or you do not have access to
+# it") — só `openai/gpt-oss-120b` respondeu; suporta tool-calling, testado
+# ponta a ponta.
+GROQ_LLM = "groq/openai/gpt-oss-120b"
 OLLAMA_EMBEDDER = {
     "provider": "ollama",
     "config": {

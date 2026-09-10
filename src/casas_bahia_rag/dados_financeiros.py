@@ -118,13 +118,19 @@ def serie_resultado_financeiro(
     if not linhas:
         return None
 
-    candidatas = [
+    todas = [
         linha
         for linha in linhas
         if linha["CD_CONTA"] == conta
         and linha["ORDEM_EXERC"] == "ÚLTIMO"
         and _eh_trimestre_isolado(linha)
     ]
+    if not todas:
+        return None
+    todas.sort(key=lambda l: l["DT_FIM_EXERC"])
+    mais_recente = todas[-1]
+
+    candidatas = todas
     if ano_inicio is not None:
         candidatas = [
             l for l in candidatas
@@ -138,19 +144,37 @@ def serie_resultado_financeiro(
     if not candidatas:
         return None
 
-    candidatas.sort(key=lambda l: l["DT_FIM_EXERC"])
-    rotulo_conta = CONTAS_RESUMO.get(conta, conta)
-    linhas_texto = [
-        f"Série trimestral isolada (não acumulada) de {rotulo_conta} "
-        "(fonte: CVM, dataset estruturado ITR/DFP; 4º trimestre isolado não "
-        "existe nesse dataset, só o acumulado do ano):"
-    ]
-    for l in candidatas:
+    def _texto_linha(l: dict) -> str:
         inicio = date.fromisoformat(l["DT_INI_EXERC"])
         fim = date.fromisoformat(l["DT_FIM_EXERC"])
         trimestre_num = (inicio.month - 1) // 3 + 1
         milhoes = float(l["VL_CONTA"]) / 1000
         sinal = "-" if milhoes < 0 else ""
         texto_valor = f"{sinal}R$ {abs(milhoes):,.0f} milhões".replace(",", ".")
-        linhas_texto.append(f"- {trimestre_num}T{fim.year % 100:02d}: {texto_valor}")
+        return f"- {trimestre_num}T{fim.year % 100:02d}: {texto_valor}"
+
+    rotulo_conta = CONTAS_RESUMO.get(conta, conta)
+    linhas_texto = [
+        f"Série trimestral isolada (não acumulada) de {rotulo_conta} "
+        "(fonte: CVM, dataset estruturado ITR/DFP; 4º trimestre isolado não "
+        "existe nesse dataset, só o acumulado do ano):"
+    ]
+    linhas_texto += [_texto_linha(l) for l in candidatas]
+
+    # O intervalo pedido (ano_fim) pode deixar de fora dado mais recente que
+    # o próprio LLM decidiu cortar por conta própria mesmo instruído a não
+    # limitar (ver STATE.md — reforço só no prompt não bastou). Garantia no
+    # código: tudo que é mais recente que o fim do intervalo pedido some
+    # aqui embaixo, não só o último trimestre — senão criaria buraco (ex.
+    # pedir até 2024 quando já tem 2025 e 2026 esconderia o ano inteiro de
+    # 2025, não só o trimestre mais atual).
+    if mais_recente not in candidatas:
+        fim_pedido = candidatas[-1]["DT_FIM_EXERC"]
+        excluidos_mais_recentes = [l for l in todas if l["DT_FIM_EXERC"] > fim_pedido]
+        linhas_texto.append(
+            "\n(Fora do intervalo pedido, mas são os dados mais recentes "
+            "disponíveis — inclua na resposta se relevante, não esconda por "
+            "causa do filtro pedido:)"
+        )
+        linhas_texto += [_texto_linha(l) for l in excluidos_mais_recentes]
     return "\n".join(linhas_texto)

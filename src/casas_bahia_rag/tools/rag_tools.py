@@ -57,14 +57,17 @@ def consultar_serie_historica_resultado(
     pergunta — ela só devolve um ponto (um trimestre ou ano por vez), não
     serve pra varrer um intervalo; e NÃO tente montar a série chamando
     "Consultar resultado financeiro" várias vezes ano a ano, essa tool já
-    devolve tudo de uma vez. `ano_inicio`/`ano_fim` opcionais (omita pra
-    série completa disponível, 2021 em diante)."""
+    devolve tudo de uma vez. `ano_inicio`/`ano_fim` opcionais — **omita os
+    dois por padrão** (série completa disponível, 2021 em diante); não
+    limite o intervalo por conta própria sem o usuário ter pedido um
+    recorte específico. Se limitar, priorize sempre os anos mais recentes
+    (nunca deixe de fora o período mais atual disponível)."""
     resultado = serie_resultado_financeiro(ano_inicio=ano_inicio, ano_fim=ano_fim)
     return resultado or "Nenhum dado estruturado de série histórica disponível pra esse período."
 
 
 @tool("Consultar composição do conselho e diretoria")
-def consultar_composicao_conselho() -> str:
+def consultar_composicao_conselho(confirmar: bool = True) -> str:
     """Retorna a composição atual de Conselho de Administração, Diretoria e
     Conselho Fiscal da Grupo Casas Bahia, direto do Formulário de Referência
     (FRE) estruturado da CVM — sempre a versão mais recente arquivada, já
@@ -72,7 +75,13 @@ def consultar_composicao_conselho() -> str:
     quem são os membros do conselho, diretores, CEO/presidente ou conselho
     fiscal; não use a busca na base de conhecimento pra esse tipo de
     pergunta, atas de assembleia antigas podem trazer gente que já
-    renunciou."""
+    renunciou.
+
+    `confirmar` é parâmetro dummy, ignore-o — não precisa passar nada.
+    Existe só porque o Groq (fallback, ver STATE.md) rejeita em modo strict
+    qualquer tool sem nenhum parâmetro (trata `properties: {}` como
+    ausente, confirmado inspecionando o corpo HTTP real — bug do lado do
+    provider, não do litellm/crewai)."""
     resultado = contexto_composicao_conselho()
     return resultado or "Nenhum dado estruturado de composição de conselho disponível."
 
