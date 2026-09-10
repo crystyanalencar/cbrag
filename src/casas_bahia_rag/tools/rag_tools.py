@@ -5,24 +5,62 @@ roteamento por palavra-chave que existia antes (knowledge_config.
 grupo_da_pergunta, ainda disponível como utilitário, não é mais chamada
 daqui).
 """
+from typing import Literal
+
 from crewai.tools import tool
 
 from casas_bahia_rag.composicao_conselho import contexto_composicao_conselho
-from casas_bahia_rag.dados_financeiros import contexto_resultado_financeiro
+from casas_bahia_rag.dados_financeiros import (
+    contexto_resultado_financeiro,
+    serie_resultado_financeiro,
+)
 from casas_bahia_rag.knowledge_config import buscar_contexto
 
 
 @tool("Consultar resultado financeiro")
-def consultar_resultado_financeiro() -> str:
-    """Retorna a DRE (demonstração de resultado) consolidada mais recente
-    da Grupo Casas Bahia, direto do dataset estruturado da CVM (ITR/DFP) —
-    Receita, Resultado Bruto, EBIT, Resultado Financeiro, LAIR e Resultado
-    Líquido do último trimestre isolado, com período exato. Use pra
-    qualquer pergunta sobre lucro, prejuízo, receita, EBITDA, margem ou
-    resultado financeiro em geral — é a fonte mais confiável pra número,
-    não precisa de outro argumento."""
-    resultado = contexto_resultado_financeiro()
-    return resultado or "Nenhum dado estruturado de resultado financeiro disponível."
+def consultar_resultado_financeiro(
+    ano: int | None = None,
+    periodo: Literal["trimestre", "ano"] = "trimestre",
+) -> str:
+    """Retorna a DRE (demonstração de resultado) consolidada da Grupo Casas
+    Bahia, direto do dataset estruturado da CVM (ITR/DFP) — Receita,
+    Resultado Bruto, EBIT, Resultado Financeiro, LAIR e Resultado Líquido,
+    com período exato. Use pra qualquer pergunta sobre lucro, prejuízo,
+    receita, EBITDA, margem ou resultado financeiro em geral — é a fonte
+    mais confiável pra número.
+
+    Não precisa saber o ano de antemão — deixe `ano=None` (padrão) e ajuste
+    só `periodo`: `periodo="trimestre"` (padrão) devolve o último trimestre
+    isolado disponível; `periodo="ano"` sem `ano` devolve o último ano
+    fechado disponível (não o ano corrente, que ainda não fechou). Informe
+    `ano` só se a pergunta citar um ano específico, no passado (ex.:
+    "resultado de 2023"). Combine com `periodo="ano"` quando a pergunta
+    pedir claramente o ano fechado/inteiro (ex.: "resultado de 2023 no ano
+    todo"); use "trimestre" (padrão) se mencionar um trimestre específico ou
+    não deixar claro."""
+    resultado = contexto_resultado_financeiro(ano=ano, periodo=periodo)
+    return resultado or "Nenhum dado estruturado de resultado financeiro disponível pra esse período."
+
+
+@tool("Consultar série histórica de resultado financeiro")
+def consultar_serie_historica_resultado(
+    ano_inicio: int | None = None,
+    ano_fim: int | None = None,
+) -> str:
+    """Retorna a série completa de trimestres isolados (Resultado Líquido —
+    lucro/prejuízo) da Grupo Casas Bahia, um valor por trimestre, ordenada
+    no tempo — direto do dataset estruturado da CVM. Use pra qualquer
+    pergunta de tendência ou comparação ao longo de um período, NÃO de um
+    trimestre/ano isolado: "algum trimestre teve lucro entre X e Y", "como
+    evoluiu o resultado", "desde quando dá prejuízo", "compare 2022 com
+    2024". NÃO use "Consultar resultado financeiro" pra esse tipo de
+    pergunta — ela só devolve um ponto (um trimestre ou ano por vez), não
+    serve pra varrer um intervalo; e NÃO tente montar a série chamando
+    "Consultar resultado financeiro" várias vezes ano a ano, essa tool já
+    devolve tudo de uma vez. `ano_inicio`/`ano_fim` opcionais (omita pra
+    série completa disponível, 2021 em diante)."""
+    resultado = serie_resultado_financeiro(ano_inicio=ano_inicio, ano_fim=ano_fim)
+    return resultado or "Nenhum dado estruturado de série histórica disponível pra esse período."
 
 
 @tool("Consultar composição do conselho e diretoria")

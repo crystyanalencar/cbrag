@@ -70,7 +70,10 @@ GRUPOS_CATEGORIA = {
 OLLAMA_LLM = "ollama/gemma4:e4b"
 # Geração via Gemini (fase 2, ver STATE.md) — lê GOOGLE_API_KEY/GEMINI_API_KEY
 # do .env (carregado automaticamente pelo crewai.llm via load_dotenv()).
-GEMINI_LLM = "gemini/gemini-2.5-flash"
+# Flash-Lite em vez de Flash puro: free tier bem mais folgado (15 RPM/1000
+# RPD vs 10 RPM/250 RPD do 2.5 Flash) — resolve os 429 de cota diária
+# batidos em sessão anterior.
+GEMINI_LLM = "gemini/gemini-3.1-flash-lite"
 OLLAMA_EMBEDDER = {
     "provider": "ollama",
     "config": {

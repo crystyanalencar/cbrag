@@ -17,11 +17,12 @@ from crewai import Agent, Flow
 from crewai.flow.conversational import ConversationConfig, ConversationState
 from crewai.flow.flow import listen
 
-from casas_bahia_rag.knowledge_config import GEMINI_LLM
+from casas_bahia_rag.knowledge_config import GEMINI_LLM, OLLAMA_LLM  # noqa: F401
 from casas_bahia_rag.tools.rag_tools import (
     buscar_conhecimento,
     consultar_composicao_conselho,
     consultar_resultado_financeiro,
+    consultar_serie_historica_resultado,
 )
 
 _agent: Agent | None = None
@@ -68,6 +69,7 @@ def rag_agent() -> Agent:
         ),
         tools=[
             consultar_resultado_financeiro,
+            consultar_serie_historica_resultado,
             consultar_composicao_conselho,
             buscar_conhecimento,
         ],

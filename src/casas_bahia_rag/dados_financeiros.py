@@ -6,6 +6,7 @@ sem ambiguidade, em vez de depender do LLM ler tabela achatada de PDF.
 import json
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 ROOT = Path(__file__).resolve().parents[2]
 DRE_FILE = ROOT / "data" / "cvm_estruturado" / "dre.json"
@@ -38,18 +39,38 @@ def _eh_trimestre_isolado(linha: dict) -> bool:
     return 80 <= (fim - inicio).days <= 100
 
 
-def contexto_resultado_financeiro() -> str | None:
-    """Texto pronto com as linhas-chave da DRE do último trimestre
-    disponível, isolado (não acumulado) — período explícito, sem exigir do
-    LLM nenhuma leitura de tabela ambígua."""
+def _eh_ano_fechado(linha: dict) -> bool:
+    """~365 dias entre início e fim do período — acumulado do ano inteiro,
+    não trimestre isolado nem acumulado parcial (semestre/9 meses)."""
+    inicio = date.fromisoformat(linha["DT_INI_EXERC"])
+    fim = date.fromisoformat(linha["DT_FIM_EXERC"])
+    return 355 <= (fim - inicio).days <= 370
+
+
+def contexto_resultado_financeiro(
+    ano: int | None = None,
+    periodo: Literal["trimestre", "ano"] = "trimestre",
+) -> str | None:
+    """Texto pronto com as linhas-chave da DRE, período explícito, sem
+    exigir do LLM nenhuma leitura de tabela ambígua.
+
+    Sem `ano`: último trimestre isolado disponível (comportamento antigo).
+    Com `ano`: trimestre isolado mais recente dentro desse ano
+    (`periodo="trimestre"`, padrão) ou o ano fechado inteiro
+    (`periodo="ano"`, ~365 dias) — CVM publica os dois pro mesmo ano, mesmo
+    CD_CONTA, então é ambíguo sem esse parâmetro (ver STATE.md)."""
     linhas = _ler_dre()
     if not linhas:
         return None
 
+    eh_periodo = _eh_ano_fechado if periodo == "ano" else _eh_trimestre_isolado
+
     candidatas = [
         linha
         for linha in linhas
-        if linha["ORDEM_EXERC"] == "ÚLTIMO" and _eh_trimestre_isolado(linha)
+        if linha["ORDEM_EXERC"] == "ÚLTIMO"
+        and eh_periodo(linha)
+        and (ano is None or date.fromisoformat(linha["DT_FIM_EXERC"]).year == ano)
     ]
     if not candidatas:
         return None
@@ -60,8 +81,9 @@ def contexto_resultado_financeiro() -> str | None:
     por_conta = {l["CD_CONTA"]: l for l in do_trimestre}
     inicio = por_conta[next(iter(por_conta))]["DT_INI_EXERC"]
 
+    rotulo_periodo = "ano fechado" if periodo == "ano" else "trimestre"
     linhas_texto = [
-        f"DRE consolidada — trimestre de {inicio} a {fim_mais_recente} "
+        f"DRE consolidada — {rotulo_periodo} de {inicio} a {fim_mais_recente} "
         "(fonte: CVM, dataset estruturado ITR/DFP):"
     ]
     for codigo, rotulo in CONTAS_RESUMO.items():
@@ -74,4 +96,61 @@ def contexto_resultado_financeiro() -> str | None:
             sinal = "-" if milhoes < 0 else ""
             texto_valor = f"{sinal}R$ {abs(milhoes):,.0f} milhões".replace(",", ".")
             linhas_texto.append(f"- {rotulo}: {texto_valor}")
+    return "\n".join(linhas_texto)
+
+
+def serie_resultado_financeiro(
+    ano_inicio: int | None = None,
+    ano_fim: int | None = None,
+    conta: str = "3.11",
+) -> str | None:
+    """Série histórica de trimestres isolados (não acumulados) de uma conta
+    da DRE, ordenada cronologicamente — pra pergunta de tendência/comparação
+    ao longo do tempo ("algum trimestre teve lucro entre X e Y", "como
+    evoluiu a receita"), que `contexto_resultado_financeiro` (um ponto só)
+    não responde. `conta` é o CD_CONTA (ver `CONTAS_RESUMO`), padrão
+    Resultado Líquido. Sem `ano_inicio`/`ano_fim`: série completa disponível.
+
+    Nota: a CVM não reporta o 4º trimestre isolado (ITR cobre só 1T/2T/3T;
+    o 4T só aparece embutido no acumulado do ano no DFP) — ausência de "4T"
+    na série é limitação do dataset, não erro."""
+    linhas = _ler_dre()
+    if not linhas:
+        return None
+
+    candidatas = [
+        linha
+        for linha in linhas
+        if linha["CD_CONTA"] == conta
+        and linha["ORDEM_EXERC"] == "ÚLTIMO"
+        and _eh_trimestre_isolado(linha)
+    ]
+    if ano_inicio is not None:
+        candidatas = [
+            l for l in candidatas
+            if date.fromisoformat(l["DT_FIM_EXERC"]).year >= ano_inicio
+        ]
+    if ano_fim is not None:
+        candidatas = [
+            l for l in candidatas
+            if date.fromisoformat(l["DT_FIM_EXERC"]).year <= ano_fim
+        ]
+    if not candidatas:
+        return None
+
+    candidatas.sort(key=lambda l: l["DT_FIM_EXERC"])
+    rotulo_conta = CONTAS_RESUMO.get(conta, conta)
+    linhas_texto = [
+        f"Série trimestral isolada (não acumulada) de {rotulo_conta} "
+        "(fonte: CVM, dataset estruturado ITR/DFP; 4º trimestre isolado não "
+        "existe nesse dataset, só o acumulado do ano):"
+    ]
+    for l in candidatas:
+        inicio = date.fromisoformat(l["DT_INI_EXERC"])
+        fim = date.fromisoformat(l["DT_FIM_EXERC"])
+        trimestre_num = (inicio.month - 1) // 3 + 1
+        milhoes = float(l["VL_CONTA"]) / 1000
+        sinal = "-" if milhoes < 0 else ""
+        texto_valor = f"{sinal}R$ {abs(milhoes):,.0f} milhões".replace(",", ".")
+        linhas_texto.append(f"- {trimestre_num}T{fim.year % 100:02d}: {texto_valor}")
     return "\n".join(linhas_texto)
