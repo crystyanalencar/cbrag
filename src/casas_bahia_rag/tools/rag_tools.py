@@ -116,7 +116,30 @@ def buscar_conhecimento(consulta: str) -> str:
     Franklin"; usuário "tem certeza sobre o número de lojas?" -> consulta
     "fechamento de lojas deficitárias quantidade de lojas 2026". Se a
     primeira busca não trouxer a resposta, tente UMA reformulação com
-    sinônimos formais antes de dizer que não achou."""
+    sinônimos formais antes de dizer que não achou.
+
+    Pergunta que cobre VÁRIOS anos ou pede um total acumulado ("de 2024 até
+    hoje", "desde X", "ao todo") NÃO deve virar uma consulta genérica só —
+    o fato relevante de cada ano fica em documento diferente e uma busca só
+    traz o ano com termo mais forte, perdendo os outros. Chame esta tool
+    UMA VEZ POR ANO do intervalo, cada vez com o ano daquela chamada
+    explícito na consulta (ex.: "fechamento de lojas deficitárias 2024",
+    depois "fechamento de lojas deficitárias 2025", depois "...2026").
+    "Até hoje"/"atualmente"/"recente" SEMPRE inclui o ano corrente (ver a
+    data de hoje no seu backstory) — nunca pare a varredura no ano
+    anterior só porque é o último ano fechado.
+
+    NUNCA some os números que vierem de anos/documentos diferentes nem
+    escolha só o maior pra apresentar como "o total": cada comunicado
+    reporta a contagem à sua própria maneira (evento pontual, acumulado
+    desde uma data-base diferente, fase específica do plano) e não são
+    aditivos — somar ou escolher um deles como "o acumulado" é fabricar um
+    número que não está em nenhum documento. Responda citando CADA número
+    com o período/evento exato que o documento atribui a ele (ex.: "298
+    lojas fechadas numa ação pontual em ago/2026" e, separadamente, "60
+    lojas fechadas até o 2T24 desde o início do plano em 2023"), e diga
+    explicitamente que a base não traz um total consolidado único pro
+    intervalo pedido, se não trouxer."""
     chunks = buscar_contexto(consulta)
     if not chunks:
         return "Nada relevante encontrado na base de conhecimento pra essa pergunta."

@@ -14,3 +14,6 @@ data/knowledge/
 # portar pra outra máquina sem reprocessar (~2h de embedding), copiar a
 # pasta na mão
 data/knowledge_storage/
+
+# log local de eventos do chat (tool calls, respostas) — ver local_tracing.py
+data/logs/

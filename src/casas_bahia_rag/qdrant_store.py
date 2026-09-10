@@ -17,6 +17,7 @@ servidor); com QDRANT_URL no .env usa servidor (docker no VPS), mesma API.
 import atexit
 import os
 import re
+import threading
 import unicodedata
 import uuid
 from pathlib import Path
@@ -50,23 +51,31 @@ _NAMESPACE = uuid.UUID("6d0c2a5e-4b3f-4f0e-9c6a-2a1b7e8f9d10")
 
 _cliente: QdrantClient | None = None
 _bm25: Bm25 | None = None
+_lock_cliente = threading.Lock()
+_lock_bm25 = threading.Lock()
 
 
 def cliente() -> QdrantClient:
     """Singleton: o modo embedded trava o diretório, abrir duas vezes no
-    mesmo processo dá erro."""
+    mesmo processo dá erro. Lock evita a corrida quando o agent chama a
+    tool de busca mais de uma vez em paralelo (threads concorrentes viam
+    `_cliente is None` ao mesmo tempo e a segunda tentava abrir o diretório
+    já travado pela primeira)."""
     global _cliente
     if _cliente is None:
-        url = os.environ.get("QDRANT_URL")
-        if url:
-            _cliente = QdrantClient(url=url, api_key=os.environ.get("QDRANT_API_KEY"))
-        else:
-            QDRANT_PATH.mkdir(parents=True, exist_ok=True)
-            _cliente = QdrantClient(path=str(QDRANT_PATH))
-        # Fechar explicitamente antes do interpretador morrer: o __del__ do
-        # cliente embedded roda tarde demais e estoura "sys.meta_path is
-        # None" no shutdown (só ruído, mas polui todo script).
-        atexit.register(_cliente.close)
+        with _lock_cliente:
+            if _cliente is None:
+                url = os.environ.get("QDRANT_URL")
+                if url:
+                    _cliente = QdrantClient(url=url, api_key=os.environ.get("QDRANT_API_KEY"))
+                else:
+                    QDRANT_PATH.mkdir(parents=True, exist_ok=True)
+                    _cliente = QdrantClient(path=str(QDRANT_PATH))
+                # Fechar explicitamente antes do interpretador morrer: o
+                # __del__ do cliente embedded roda tarde demais e estoura
+                # "sys.meta_path is None" no shutdown (só ruído, mas polui
+                # todo script).
+                atexit.register(_cliente.close)
     return _cliente
 
 
@@ -76,7 +85,9 @@ def bm25() -> Bm25:
     `Modifier.IDF` na coleção — sem o modifier BM25 vira contagem crua."""
     global _bm25
     if _bm25 is None:
-        _bm25 = Bm25("Qdrant/bm25", language="portuguese")
+        with _lock_bm25:
+            if _bm25 is None:
+                _bm25 = Bm25("Qdrant/bm25", language="portuguese")
     return _bm25
 
 

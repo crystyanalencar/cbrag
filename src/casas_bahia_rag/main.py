@@ -15,6 +15,7 @@ termo (roteamento por palavra-chave que existiu até a fase 3.2).
 import logging
 import re
 import time
+from datetime import date
 
 import litellm
 from google.genai.errors import APIError as GeminiAPIError
@@ -23,11 +24,14 @@ from crewai import Agent, Flow
 from crewai.flow.conversational import ConversationConfig, ConversationState
 from crewai.flow.flow import listen
 
+from casas_bahia_rag import local_tracing
 from casas_bahia_rag.knowledge_config import (  # noqa: F401
     GEMINI_LLM,
     GROQ_LLM,
     OLLAMA_LLM,
 )
+
+local_tracing.ativar()
 from casas_bahia_rag.tools.rag_tools import (
     buscar_conhecimento,
     consultar_composicao_conselho,
@@ -95,7 +99,12 @@ _BACKSTORY = (
     "apareceu na resposta, NUNCA invente uma explicação de sistema "
     "('estava configurado até X', 'limite da base') — isso é fabricação. "
     "Chame a tool de novo sem filtro de período e responda com o que "
-    "vier; se ainda assim faltar, diga que não sabe o motivo."
+    "vier; se ainda assim faltar, diga que não sabe o motivo. "
+    f"A data de hoje é {date.today().isoformat()} — use-a pra resolver "
+    "'atual', 'recente', 'até hoje', 'este ano' e pra saber qual é o ano "
+    "corrente. Pergunta com intervalo até 'hoje'/'atualmente' inclui o "
+    "ano corrente, não só os anos fechados: nunca pare a varredura de "
+    "`buscar_conhecimento` no ano anterior."
 )
 
 
