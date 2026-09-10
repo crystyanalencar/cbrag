@@ -23,6 +23,7 @@ CORPUS_PDF_DIR = ROOT / "data/corpus_pdf"
 CDX_FILES = [ROOT / "data/cdx/cdx_main.json", ROOT / "data/cdx/cdx_ri.json"]
 OUT_DIR = ROOT / "data/knowledge"
 METADATA_FILE = OUT_DIR / "_metadata.json"
+IPE_INDICE_FILE = ROOT / "data/cvm/_ipe_index.json"  # gravado por baixar_cvm.py
 
 INTERVALO_CABECALHO = 800  # caracteres; deve ser < chunk_size do TextFileKnowledgeSource
 
@@ -96,10 +97,40 @@ def processar_html(mapa_wayback: dict[str, str], metadata: dict) -> int:
     return n
 
 
+def _ler_indice_ipe() -> dict[str, dict]:
+    if not IPE_INDICE_FILE.exists():
+        return {}
+    return json.loads(IPE_INDICE_FILE.read_text(encoding="utf-8"))
+
+
+def campos_cvm(nome_arquivo: str, indice: dict[str, dict]) -> dict:
+    """Campos estruturados do CSV IPE (categoria limpa, tipo, espécie,
+    assunto, data de referência) pro documento — vazio se o arquivo não
+    está no índice (HTML do site, PDF institucional, ou índice ainda não
+    gerado). São esses campos, não o slug do nome do arquivo, que viram
+    filtro/payload na base (ver STATE.md, fase 3.2)."""
+    info = indice.get(nome_arquivo)
+    if not info:
+        return {}
+    campos = {
+        "categoria_cvm": info["categoria"],
+        "tipo_cvm": info.get("tipo") or None,
+        "especie_cvm": info.get("especie") or None,
+        "assunto": info.get("assunto") or None,
+        "data_referencia": info.get("data_referencia") or None,
+    }
+    return {k: v for k, v in campos.items() if v is not None}
+
+
 def metadado_pdf(nome_arquivo: str) -> tuple[str, str, str | None, str]:
     """Retorna (origem, categoria, data_iso, data_display) a partir do nome
     do arquivo extraído. data_iso é None quando a data não é exata o
-    bastante pra ordenar (ex. aproximada por mês) ou desconhecida."""
+    bastante pra ordenar (ex. aproximada por mês) ou desconhecida.
+
+    `categoria` aqui é o slug antigo (Categoria+Assunto grudados, 442
+    valores) — ainda gravado no payload por compatibilidade, mas filtro e
+    payload "de verdade" usam os campos limpos de `campos_cvm`
+    (`categoria_cvm`, `assunto`...)."""
     m = CVM_NOME_RE.match(nome_arquivo)
     if m:
         ano, mes, dia, resto = m.groups()
@@ -123,6 +154,7 @@ def metadado_pdf(nome_arquivo: str) -> tuple[str, str, str | None, str]:
 
 def processar_pdfs(metadata: dict) -> int:
     n = 0
+    indice = _ler_indice_ipe()
     for caminho in sorted(CORPUS_PDF_DIR.glob("*.txt")):
         origem, categoria, data_iso, data_display = metadado_pdf(caminho.stem)
         cabecalho = f"[Fonte: {origem} | Data: {data_display}]"
@@ -134,6 +166,7 @@ def processar_pdfs(metadata: dict) -> int:
             "categoria": categoria,
             "data_iso": data_iso,
             "data_ordinal": _ordinal(data_iso),
+            **campos_cvm(caminho.stem, indice),
         }
         n += 1
     return n

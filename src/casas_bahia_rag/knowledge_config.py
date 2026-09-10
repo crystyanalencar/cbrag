@@ -1,27 +1,21 @@
-"""Configuração compartilhada da base de conhecimento (Chroma + embedder
-Ollama), usada tanto pelo IngestFlow (grava) quanto pelo CasasBahiaRagFlow
-(só lê).
+"""Configuração compartilhada da base de conhecimento, usada pelo
+IngestFlow (grava) e pelo CasasBahiaRagFlow (só lê): caminhos, chunking,
+manifesto incremental, montagem de documentos com metadata e a busca que o
+chat usa. O motor (Qdrant, denso + BM25) fica em qdrant_store.py.
 
-Por que isso existe: por padrão o CrewAI grava o Chroma fora do repo
-(`%LOCALAPPDATA%\\CrewAI\\<project>\\knowledge\\` no Windows) — inconsistente
-com o resto do projeto e impossível de levar pra outra máquina sem
-reprocessar. `set_rag_config()` aponta o cliente global do CrewAI pra
-`data/knowledge_storage/` (dentro do repo, copiável) usando o embedder
-Ollama configurado aqui uma única vez.
+Histórico: até 2026-09-10 o motor era o Chroma via wrapper do CrewAI
+(`crewai.rag.chromadb`). Saiu porque Chroma local não tem vetor esparso
+(BM25 só no Chroma Cloud) e o corpus — texto regulatório da CVM — pede
+busca léxica (ver STATE.md, fase 3.2). Backup do storage antigo em
+`D:/dev/github/_backups/casas_bahia_rag_chroma_2026-09-10/`.
 
-Importante: os vetores só fazem sentido pro modelo de embedding que os
-gerou (`nomic-embed-text`, 768 dimensões). Trocar de modelo de embedding
-não é compatível com o que já foi indexado — exige reprocessar tudo do
-zero (apagar `data/knowledge_storage/` e rodar o IngestFlow de novo).
+Importante: os vetores densos só fazem sentido pro modelo de embedding que
+os gerou (`nomic-embed-text`, 768 dimensões). Trocar de modelo exige
+recriar a coleção e rodar o backfill do zero (~2h).
 """
 import hashlib
 import json
 from pathlib import Path
-
-import crewai.rag.chromadb.config as _chromadb_config_module
-from crewai.rag.chromadb.config import ChromaDBConfig
-from crewai.rag.config.utils import get_rag_client, set_rag_config
-from crewai.rag.embeddings.factory import build_embedder
 
 ROOT = Path(__file__).resolve().parents[2]
 KNOWLEDGE_DIR = ROOT / "data" / "knowledge"
@@ -37,35 +31,6 @@ COLLECTION_NAME = "casas_bahia_conhecimento"
 CHUNK_SIZE = 2000
 CHUNK_OVERLAP = 200
 RESULTS_LIMIT = 8
-SCORE_THRESHOLD = 0.35
-
-# Roteamento por categoria: cada grupo mapeia termos de intenção da pergunta
-# pra um conjunto de categorias (ver scripts/preparar_knowledge.py, campo
-# "categoria" do sidecar) que de fato respondem esse tipo de pergunta.
-# Existe porque busca semântica pura se afoga em boilerplate repetido (ex.:
-# cláusula de política de dividendos repetida em toda ata de assembleia)
-# quando a pergunta usa palavra genérica ("lucro", "conselho") — filtrar por
-# categoria primeiro exclui o Estatuto Social/editais genéricos antes da
-# busca vetorial rodar, e ordenar por data_ordinal (metadata real, não regex
-# em texto) resolve recência sem precisar de heurística de peso.
-GRUPOS_CATEGORIA = {
-    "resultado_financeiro": {
-        "termos": (
-            "resultado", "lucro", "prejuízo", "prejuizo", "ebitda",
-            "receita", "margem", "trimestre", "lair", "faturamento",
-            "dívida", "divida", "endividamento",
-        ),
-        "categorias_contem": ("dados_econ_mico_financeiros", "itr", "resultado"),
-    },
-    "governanca": {
-        "termos": (
-            "conselho", "diretoria", "ceo", "presidente", "diretor",
-            "administração", "administracao", "eleito", "eleição", "eleicao",
-            "renúncia", "renuncia",
-        ),
-        "categorias_contem": ("reuni_o_da_administra_o", "assembleia", "elei_o"),
-    },
-}
 
 OLLAMA_LLM = "ollama/gemma4:e4b"
 # Geração via Gemini (fase 2, ver STATE.md) — lê GOOGLE_API_KEY/GEMINI_API_KEY
@@ -81,50 +46,22 @@ GEMINI_LLM = "gemini/gemini-3.1-flash-lite"
 # it") — só `openai/gpt-oss-120b` respondeu; suporta tool-calling, testado
 # ponta a ponta.
 GROQ_LLM = "groq/openai/gpt-oss-120b"
-OLLAMA_EMBEDDER = {
-    "provider": "ollama",
-    "config": {
-        "model_name": "nomic-embed-text",
-        "url": "http://localhost:11434/api/embeddings",
-    },
-}
-
-def configurar_rag() -> None:
-    """Aponta o cliente Chroma global pra data/knowledge_storage/.
-
-    Chamado toda vez (não é guardado por flag): `set_rag_config()` salva a
-    config numa `ContextVar`, que é isolada por thread/contexto de
-    execução — não por processo. O CrewAI roda turnos de conversa em
-    threads diferentes, então uma guarda tipo "só configura uma vez" deixa
-    threads novas sem a config (caem no default `openai`, que bate de
-    frente com o que já foi persistido como `ollama`). Repetir a chamada é
-    barato (só monta objetos em memória, sem I/O de rede).
-    """
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-    # Construir Settings(persist_directory=...) na mão trava num bug de
-    # compatibilidade pydantic no validador da lib. Em vez disso, aponta o
-    # DEFAULT_STORAGE_PATH que ChromaDBConfig usa por padrão (mesmo caminho
-    # que o código interno do CrewAI usa com sucesso) pra dentro do repo,
-    # e deixa a fábrica de settings padrão fazer o resto.
-    _chromadb_config_module.DEFAULT_STORAGE_PATH = str(STORAGE_DIR)
-    embedding_function = build_embedder(OLLAMA_EMBEDDER)
-    set_rag_config(ChromaDBConfig(embedding_function=embedding_function))
 
 
 def _hash_arquivo(caminho: Path) -> str:
     return hashlib.sha256(caminho.read_bytes()).hexdigest()
 
 
-def _ler_manifesto() -> dict[str, str]:
+def _ler_manifesto() -> dict:
     if not MANIFEST_FILE.exists():
         return {}
     return json.loads(MANIFEST_FILE.read_text(encoding="utf-8"))
 
 
 def _hash_do_registro(registro) -> str | None:
-    """Manifesto antigo (antes desta sessão) guardava só a hash como
-    string; formato novo guarda {"hash", "chunks", "embedado_em"} pra dar
-    visibilidade do que entrou no índice sem precisar consultar o Chroma."""
+    """Manifesto antigo guardava só a hash como string; formato atual
+    guarda {"hash", "chunks", "embedado_em"} pra dar visibilidade do que
+    entrou no índice sem precisar consultar o banco."""
     if registro is None:
         return None
     return registro if isinstance(registro, str) else registro.get("hash")
@@ -132,21 +69,20 @@ def _hash_do_registro(registro) -> str | None:
 
 def arquivos_pendentes(arquivos: list[Path]) -> list[Path]:
     """Filtra, dentre `arquivos`, só os que são novos ou mudaram desde a
-    última vez que foram embedados (hash do conteúdo diferente do
+    última vez que foram indexados (hash do conteúdo diferente do
     manifesto). Sem chamada de rede — só leitura de disco."""
     manifesto = _ler_manifesto()
     pendentes = []
     for caminho in arquivos:
-        chave = caminho.name
-        if _hash_do_registro(manifesto.get(chave)) != _hash_arquivo(caminho):
+        if _hash_do_registro(manifesto.get(caminho.name)) != _hash_arquivo(caminho):
             pendentes.append(caminho)
     return pendentes
 
 
 def ano_do_arquivo(caminho: Path) -> int | None:
     """Ano (de data_iso, sidecar de preparar_knowledge.py) pra permitir
-    embedar em fases (2026 primeiro, testar, depois voltar pro resto) em
-    vez de tudo de uma vez — útil com rate limit de API paga/free tier."""
+    indexar em fases (2026 primeiro, testar, depois voltar pro resto) em
+    vez de tudo de uma vez."""
     data_iso = _ler_metadata_sidecar().get(caminho.name, {}).get("data_iso")
     return int(data_iso[:4]) if data_iso else None
 
@@ -164,9 +100,7 @@ def ordenar_por_recencia(arquivos: list[Path], ano_minimo: int | None = None) ->
 
 def atualizar_manifesto(arquivos: list[Path], n_chunks: dict[str, int] | None = None) -> None:
     """Registra hash + quantidade de chunks + timestamp de cada arquivo
-    processado, preservando entradas de arquivos não tocados nesta rodada.
-    `n_chunks` (nome do arquivo -> nº de chunks enviados) é opcional pra
-    manter compatibilidade com chamadas que só querem marcar o hash."""
+    processado, preservando entradas de arquivos não tocados nesta rodada."""
     from datetime import datetime, timezone
 
     n_chunks = n_chunks or {}
@@ -184,11 +118,10 @@ def atualizar_manifesto(arquivos: list[Path], n_chunks: dict[str, int] | None = 
 
 
 def _chunk_texto(texto: str) -> list[str]:
-    """Mesmo slicing char-based que TextFileKnowledgeSource._chunk_text
-    usava (crewai/knowledge/source/text_file_knowledge_source.py) —
-    mantido idêntico pra não mudar o tamanho/overlap dos chunks já
-    existentes, só o caminho de escrita (direto no ChromaDBClient, com
-    metadata, em vez de via Knowledge/TextFileKnowledgeSource)."""
+    """Slicing char-based (mesmo tamanho/overlap desde o início do projeto,
+    herdado do TextFileKnowledgeSource do CrewAI) — mudar isso muda o
+    doc_id de todo chunk e força reindexar tudo. Chunking por estrutura do
+    documento fica registrado como fase futura no STATE.md."""
     return [
         texto[i : i + CHUNK_SIZE]
         for i in range(0, len(texto), CHUNK_SIZE - CHUNK_OVERLAP)
@@ -196,13 +129,18 @@ def _chunk_texto(texto: str) -> list[str]:
 
 
 def montar_documentos(caminho: Path) -> list[dict]:
-    """Chunka um arquivo de data/knowledge/ e monta os dicts pro
-    ChromaDBClient.add_documents, com a metadata estruturada do sidecar
-    (categoria, data_iso, data_ordinal) — Chroma não aceita valor None em
-    metadata, então chaves com valor desconhecido são omitidas."""
+    """Chunka um arquivo de data/knowledge/ e monta os dicts
+    `{content, doc_id, metadata}` — doc_id é sha256 do chunk (identidade
+    estável, vira o id do ponto no Qdrant), metadata vem do sidecar
+    (`categoria_cvm`, `assunto`, `data_iso`, `data_ordinal`...); chaves com
+    valor desconhecido são omitidas."""
     info = _ler_metadata_sidecar().get(caminho.name, {})
     metadata_base = {"arquivo": caminho.name}
-    for chave in ("origem", "categoria", "data_iso", "data_ordinal"):
+    for chave in (
+        "origem", "categoria", "data_iso", "data_ordinal",
+        # campos limpos do CSV IPE (preparar_knowledge.campos_cvm)
+        "categoria_cvm", "tipo_cvm", "especie_cvm", "assunto", "data_referencia",
+    ):
         valor = info.get(chave)
         if valor is not None:
             metadata_base[chave] = valor
@@ -220,108 +158,26 @@ def montar_documentos(caminho: Path) -> list[dict]:
     return documentos
 
 
-def cliente_rag():
-    """Cliente de baixo nível do Chroma (get_rag_client), não o wrapper
-    Knowledge/TextFileKnowledgeSource — usado tanto pro embedding
-    (add_documents com metadata real) quanto pra busca (search com where),
-    porque a API de alto nível do CrewAI marca `metadata` como "Currently
-    unused" e nunca repassa pro storage (ver STATE.md)."""
-    configurar_rag()
-    return get_rag_client()
-
-
 def _ler_metadata_sidecar() -> dict[str, dict]:
     if not METADATA_SIDECAR.exists():
         return {}
     return json.loads(METADATA_SIDECAR.read_text(encoding="utf-8"))
 
 
-def grupo_da_pergunta(pergunta: str) -> str | None:
-    pergunta_lower = pergunta.lower()
-    for nome_grupo, grupo in GRUPOS_CATEGORIA.items():
-        if any(termo in pergunta_lower for termo in grupo["termos"]):
-            return nome_grupo
-    return None
-
-
-def _categorias_do_grupo(nome_grupo: str) -> list[str]:
-    """Resolve os substrings de `categorias_contem` pras categorias
-    concretas que de fato existem no corpus (lidas do sidecar) — o `where`
-    do Chroma só faz match exato/`$in`, não substring, então essa resolução
-    precisa acontecer em Python antes da busca."""
-    substrings = GRUPOS_CATEGORIA[nome_grupo]["categorias_contem"]
-    categorias_existentes = {
-        info["categoria"] for info in _ler_metadata_sidecar().values() if info.get("categoria")
-    }
-    return [
-        categoria
-        for categoria in categorias_existentes
-        if any(sub in categoria for sub in substrings)
-    ]
-
-
 def buscar_contexto(pergunta: str) -> list[str]:
-    """Retorna os trechos mais relevantes da base já embedada.
+    """Só o texto dos trechos, pro LLM — ver `buscar_resultados`."""
+    return [r["content"] for r in buscar_resultados(pergunta)]
 
-    Pergunta que bate com um grupo de intenção conhecido (resultado
-    financeiro, governança — ver GRUPOS_CATEGORIA) busca só dentro das
-    categorias relevantes via `where` nativo do Chroma, ordenado por
-    `data_ordinal` real (metadata, não regex em texto) — evita o afogamento
-    por boilerplate repetido (ex.: cláusula de dividendo repetida em toda
-    ata) que fazia o chunk certo nem entrar no top-K da busca semântica
-    livre. Pergunta sem grupo conhecido (narrativa/qualitativa) segue busca
-    semântica normal, sem filtro.
-    """
-    cliente = cliente_rag()
-    nome_grupo = grupo_da_pergunta(pergunta)
 
-    if nome_grupo is None:
-        resultados = cliente.search(
-            collection_name=COLLECTION_NAME,
-            query=pergunta,
-            limit=RESULTS_LIMIT,
-            score_threshold=SCORE_THRESHOLD,
-        )
-        return [r["content"] for r in resultados]
+def buscar_resultados(pergunta: str) -> list[dict]:
+    """Busca que o chat usa: índice Qdrant (qdrant_store.py), modo
+    `MODO_CHAT` (BM25 puro hoje — decidido pelo golden, ver STATE.md fase
+    3.2; híbrido fica a um switch de distância pra quando o embedder
+    denso melhorar). Devolve dicts `{content, metadata, score}` na ordem
+    do ranking, que `scripts/avaliar_retrieval.py` usa pra medir recall
+    contra o golden sem depender do LLM. Sem roteamento por categoria nem
+    blend de recência: eram remendos pra diluição da busca vetorial, e o
+    BM25 sem eles já supera o Chroma com eles no golden."""
+    from casas_bahia_rag import qdrant_store  # import local: qdrant_store importa este módulo
 
-    categorias = _categorias_do_grupo(nome_grupo)
-    if not categorias:
-        resultados = cliente.search(
-            collection_name=COLLECTION_NAME,
-            query=pergunta,
-            limit=RESULTS_LIMIT,
-            score_threshold=SCORE_THRESHOLD,
-        )
-        return [r["content"] for r in resultados]
-
-    # Testado com a pergunta "quais são os membros do conselho": a ata de
-    # renúncia relevante só aparecia na posição 132 dentre os candidatos da
-    # categoria "governança" (categoria é ampla — 189 valores distintos
-    # batem no substring, cobre toda reunião/assembleia, não só composição
-    # de conselho). limit=RESULTS_LIMIT*6 (48) era curto demais pra
-    # garantir recall; 300 cobre com folga.
-    candidatos = cliente.search(
-        collection_name=COLLECTION_NAME,
-        query=pergunta,
-        limit=300,
-        score_threshold=0.0,
-        where={"categoria": {"$in": categorias}},
-    )
-    if not candidatos:
-        return []
-
-    # Ordenar só por data (como fazia antes) reintroduz o problema oposto:
-    # documento recente mas irrelevante (ex. outra reunião da
-    # administração sobre assunto sem relação) supera um documento antigo
-    # mas relevante. Com recall já garantido pelo limit acima, mistura
-    # score semântico (sinal fraco, mas não nulo) com recência.
-    datas = [c["metadata"].get("data_ordinal") or 0 for c in candidatos]
-    data_min, data_max = min(datas), max(datas)
-    intervalo = (data_max - data_min) or 1
-
-    def score_combinado(candidato: dict) -> float:
-        recencia = ((candidato["metadata"].get("data_ordinal") or 0) - data_min) / intervalo
-        return 0.4 * candidato["score"] + 0.6 * recencia
-
-    candidatos.sort(key=score_combinado, reverse=True)
-    return [r["content"] for r in candidatos[:RESULTS_LIMIT]]
+    return qdrant_store.buscar(pergunta, modo=qdrant_store.MODO_CHAT)

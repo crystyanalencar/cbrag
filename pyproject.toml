@@ -9,6 +9,7 @@ dependencies = [
     "crewai[google-genai,litellm,tools]>=1.15.20,<2.0.0",
     "ollama>=0.6.2",
     "pypdf>=6.17.0",
+    "qdrant-client[fastembed]>=1.19.0",
     "requests>=2.34.2",
 ]
 

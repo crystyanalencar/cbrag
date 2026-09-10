@@ -6,6 +6,7 @@ institucional/RI, que usam Akamai).
 """
 import csv
 import io
+import json
 import re
 import time
 import zipfile
@@ -15,6 +16,11 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 PDF_DIR = ROOT / "data/cvm"
+# Metadata estruturada do CSV IPE por documento (Categoria, Tipo, Especie,
+# Assunto, datas) — sem isso preparar_knowledge.py tinha que recuperar a
+# categoria de volta do nome do arquivo (Categoria+Assunto grudados num slug
+# só, 442 valores distintos). Chave: nome do arquivo sem extensão.
+INDICE_FILE = PDF_DIR / "_ipe_index.json"
 
 CODIGO_CVM = "6505"  # Grupo Casas Bahia S.A.
 ANOS = range(2021, 2027)
@@ -46,6 +52,26 @@ def nome_arquivo(linha: dict) -> str:
     return f"{slug[:180]}.pdf"
 
 
+def salvar_indice(linhas: list[dict]) -> None:
+    """Grava INDICE_FILE com as colunas úteis do CSV IPE, uma entrada por
+    documento, chaveada pelo mesmo nome que `nome_arquivo` gera — é assim
+    que preparar_knowledge.py casa o .txt extraído com a linha do CSV."""
+    indice = {}
+    for linha in linhas:
+        chave = nome_arquivo(linha).removesuffix(".pdf")
+        indice[chave] = {
+            "categoria": linha["Categoria"],
+            "tipo": linha.get("Tipo", ""),
+            "especie": linha.get("Especie", ""),
+            "assunto": linha.get("Assunto", ""),
+            "data_entrega": linha["Data_Entrega"][:10],
+            "data_referencia": linha.get("Data_Referencia", "")[:10],
+            "protocolo": linha["Protocolo_Entrega"],
+        }
+    INDICE_FILE.write_text(json.dumps(indice, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Índice IPE: {len(indice)} documentos em {INDICE_FILE}")
+
+
 def main() -> dict:
     PDF_DIR.mkdir(parents=True, exist_ok=True)
     todas_linhas = []
@@ -53,6 +79,7 @@ def main() -> dict:
         linhas = baixar_csv_do_ano(ano)
         print(f"{ano}: {len(linhas)} documentos da Grupo Casas Bahia")
         todas_linhas.extend(linhas)
+    salvar_indice(todas_linhas)
 
     salvos, falhas = 0, 0
     for linha in todas_linhas:

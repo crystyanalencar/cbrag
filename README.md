@@ -1,56 +1,54 @@
-# {{crew_name}} Crew
+# casas_bahia_rag
 
-Welcome to the {{crew_name}} Crew project, powered by [crewAI](https://crewai.com). This template is designed to help you set up a multi-agent AI system with ease, leveraging the powerful and flexible framework provided by crewAI. Our goal is to enable your agents to collaborate effectively on complex tasks, maximizing their collective intelligence and capabilities.
+Chatbot RAG conversacional sobre a Grupo Casas Bahia (institucional, RI,
+governança e financeiro), construído com CrewAI (Flow conversacional +
+tool-calling) sobre documentos públicos da CVM e do site da empresa.
 
-## Installation
+- **Geração**: Gemini (`gemini-3.1-flash-lite`), fallback automático pro Groq.
+- **Retrieval**: Qdrant embedded com dois vetores por chunk — denso
+  (`nomic-embed-text` via Ollama) e esparso BM25 (fastembed, stemmer
+  português). O chat usa BM25 puro; híbrido com RRF fica disponível por
+  configuração (`qdrant_store.MODO_CHAT`).
+- **Dados estruturados** (DRE trimestral, composição do conselho) vêm dos
+  datasets abertos da CVM e viram tools próprias — o LLM decide qual chamar.
 
-Ensure you have Python >=3.10 <3.14 installed on your system. This project uses [UV](https://docs.astral.sh/uv/) for dependency management and package handling, offering a seamless setup and execution experience.
+Estado do trabalho, decisões e pendências: [STATE.md](STATE.md).
 
-First, if you haven't already, install uv:
+## Requisitos
 
-```bash
-pip install uv
-```
-
-Next, navigate to your project directory and install the dependencies:
-
-(Optional) Lock the dependencies and install them by using the CLI command:
-```bash
-crewai install
-```
-
-### Customizing
-
-**Add your `OPENAI_API_KEY` into the `.env` file**
-
-- Modify `src/casas_bahia_rag/config/agents.yaml` to define your agents
-- Modify `src/casas_bahia_rag/config/tasks.yaml` to define your tasks
-- Modify `src/casas_bahia_rag/crew.py` to add your own logic, tools and specific args
-- Modify `src/casas_bahia_rag/main.py` to add custom inputs for your agents and tasks
-
-## Running the Project
-
-To kickstart your flow and begin execution, run this from the root folder of your project:
+- Python >= 3.10 < 3.14, [uv](https://docs.astral.sh/uv/)
+- [Ollama](https://ollama.com) rodando local com `nomic-embed-text` (embedding)
+- `.env` com `GEMINI_API_KEY` (ou `GOOGLE_API_KEY`) e `GROQ_API_KEY`
+  (fallback). Opcional: `QDRANT_URL`/`QDRANT_API_KEY` pra usar um servidor
+  Qdrant em vez do modo embedded.
 
 ```bash
-crewai run
+uv sync
 ```
 
-This command initializes the casas_bahia_rag Flow as defined in your configuration.
+## Rodar
 
-This example, unmodified, will run a content creation flow on AI Agents and save the output to `output/post.md`.
+```bash
+uv run ingest   # coleta CVM/site, prepara o corpus e indexa no Qdrant (incremental)
+uv run chat     # REPL do chatbot no terminal
+```
 
-## Understanding Your Crew
+Utilitários:
 
-The casas_bahia_rag Crew is composed of multiple AI agents, each with unique roles, goals, and tools. These agents collaborate on a series of tasks, defined in `config/tasks.yaml`, leveraging their collective skills to achieve complex objectives. The `config/agents.yaml` file outlines the capabilities and configurations of each agent in your crew.
+```bash
+uv run python scripts/backfill_qdrant.py            # só reindexa (sem recoletar)
+uv run python scripts/backfill_qdrant.py --so-bm25  # recalcula só o vetor esparso
+uv run python scripts/avaliar_retrieval.py --modo chat      # recall@8/MRR no golden
+uv run python scripts/avaliar_retrieval.py --modo qdrant-hibrido --verboso
+```
 
-## Support
+## Layout
 
-For support, questions, or feedback regarding the {{crew_name}} Crew or crewAI.
-
-- Visit our [documentation](https://docs.crewai.com)
-- Reach out to us through our [GitHub repository](https://github.com/joaomdmoura/crewai)
-- [Join our Discord](https://discord.com/invite/X4JWnZnxPb)
-- [Chat with our docs](https://chatg.pt/DWjSBZn)
-
-Let's create wonders together with the power and simplicity of crewAI.
+- `src/casas_bahia_rag/main.py` — Flow conversacional, agente, fallback de LLM
+- `src/casas_bahia_rag/tools/rag_tools.py` — tools que o agente chama
+- `src/casas_bahia_rag/qdrant_store.py` — índice Qdrant (denso + BM25, busca)
+- `src/casas_bahia_rag/knowledge_config.py` — caminhos, chunking, manifesto
+- `src/casas_bahia_rag/dados_financeiros.py`, `composicao_conselho.py` — dados estruturados da CVM
+- `scripts/` — coleta (Wayback, CVM), extração de PDF, preparação do corpus, avaliação
+- `tests/golden_retrieval.json` — perguntas com documento esperado, pra medir retrieval
+- `data/` — corpus e índice (gerados, fora do git)

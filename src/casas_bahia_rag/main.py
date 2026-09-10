@@ -10,8 +10,7 @@ suporta tools e "decides automatically when to call" cada uma, sem precisar
 de Crew/Task. O LLM decide sozinho se chama `consultar_resultado_financeiro`
 (DRE estruturada da CVM) ou `buscar_conhecimento` (RAG) — ou os dois —
 baseado na pergunta, em vez de nós prevermos isso com uma lista fixa de
-termo (`knowledge_config.grupo_da_pergunta`, mantida só como utilitário,
-não é mais chamada daqui).
+termo (roteamento por palavra-chave que existiu até a fase 3.2).
 """
 import logging
 import re

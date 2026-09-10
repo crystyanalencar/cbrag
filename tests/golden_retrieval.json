@@ -1,0 +1,104 @@
+{
+  "_doc": "Golden set de retrieval: pergunta -> substring(s) do nome do arquivo em data/knowledge/ que contém a resposta. Acerto = algum dos top-K trazer arquivo cujo nome contém qualquer substring de `esperado`. Perguntas marcadas `falha_conhecida: true` são casos reais que a busca vetorial pura não recuperou (ver STATE.md, fase 3.2); as demais funcionavam antes e servem pra pegar regressão. Casos com `parafrase: true` usam vocabulário diferente do documento de propósito (medem o lado semântico, pra não tunar o híbrido só em pergunta léxica).",
+  "casos": [
+    {
+      "pergunta": "Quantas lojas deficitárias a Casas Bahia fechou em 2026?",
+      "esperado": [
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos"
+      ],
+      "falha_conhecida": true
+    },
+    {
+      "pergunta": "tem certeza sobre o número de lojas? houve fechamento de lojas recentemente?",
+      "esperado": [
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos",
+        "2026_08_16_comunicado_ao_mercado_apresenta_o_de_resultado_2t26"
+      ],
+      "falha_conhecida": true
+    },
+    {
+      "pergunta": "Quem foi o CEO anterior a Renato Franklin?",
+      "esperado": [
+        "2023_03_31_reuni_o_da_administra_o_i_tomar_conhecimento_acerca_da_ren_ncia_do_sr_roberto_fulcherberguer"
+      ],
+      "falha_conhecida": true
+    },
+    {
+      "pergunta": "Quando houve alteração na remuneração dos administradores da companhia?",
+      "esperado": [
+        "proposta_de_remunera",
+        "remunera_o_global"
+      ],
+      "falha_conhecida": true
+    },
+    {
+      "pergunta": "Quantas pessoas foram demitidas junto com o fechamento de lojas?",
+      "esperado": [
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos"
+      ],
+      "falha_conhecida": true
+    },
+    {
+      "pergunta": "Quais membros do conselho de administração renunciaram em agosto de 2026?",
+      "esperado": [
+        "2026_08_16_reuni_o_da_administra_o_i_consigna_o_do_recebimento_de_cartas_de_ren_ncia"
+      ]
+    },
+    {
+      "pergunta": "Quando a Casas Bahia pediu recuperação judicial?",
+      "esperado": [
+        "2026_08_16_fato_relevante_pedido_de_recupera_o_judicial",
+        "recupera_o_judicial_ou_extrajudicial_peti_o_inicial"
+      ]
+    },
+    {
+      "pergunta": "Quando a Via Varejo mudou de marca e passou a se chamar Via?",
+      "esperado": [
+        "2021_04_25_comunicado_ao_mercado_comunicado_ao_mercado_notice_to_the_market_via_varejo_muda_marca"
+      ]
+    },
+    {
+      "pergunta": "A Via Varejo ganhou algum prêmio pela oferta de follow-on de 2020?",
+      "esperado": [
+        "2021_01_29_comunicado_ao_mercado_via_varejo_eleita_melhor_oferta_de_follow_on"
+      ]
+    },
+    {
+      "pergunta": "Quais mudanças organizacionais foram anunciadas em setembro de 2023?",
+      "esperado": [
+        "2023_09_26_comunicado_ao_mercado_mudan_as_organizacionais"
+      ]
+    },
+    {
+      "pergunta": "A empresa demitiu muita gente recentemente?",
+      "esperado": [
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos"
+      ],
+      "parafrase": true
+    },
+    {
+      "pergunta": "Como foi a troca de comando na presidência executiva em 2023?",
+      "esperado": [
+        "2023_03_31_reuni_o_da_administra_o_i_tomar_conhecimento",
+        "2023_03_31_fato_relevante_elei_o_de_novo_diretor_presidente"
+      ],
+      "parafrase": true
+    },
+    {
+      "pergunta": "A companhia está passando por dificuldades financeiras graves?",
+      "esperado": [
+        "2026_08_16_fato_relevante_pedido_de_recupera_o_judicial",
+        "recupera_o_judicial_ou_extrajudicial_peti_o_inicial",
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos"
+      ],
+      "parafrase": true
+    },
+    {
+      "pergunta": "Qual o novo nome da empresa depois do rebranding de 2021?",
+      "esperado": [
+        "2021_04_25_comunicado_ao_mercado_comunicado_ao_mercado_notice_to_the_market_via_varejo_muda_marca"
+      ],
+      "parafrase": true
+    }
+  ]
+}

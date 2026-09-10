@@ -1,13 +1,19 @@
 """Tools do rag_agent (main.py) — o LLM decide sozinho quando chamar cada
 uma (confirmado na doc oficial: docs.crewai.com/en/concepts/agents,
 "the agent decides automatically when to call the tools"), substituindo o
-roteamento por palavra-chave que existia antes (knowledge_config.
-grupo_da_pergunta, ainda disponível como utilitário, não é mais chamada
-daqui).
+roteamento por palavra-chave que existia antes da fase 3.2.
 """
 from typing import Literal
 
 from crewai.tools import tool
+
+# Nomes das tools são snake_case curtos, iguais ao nome da função. O
+# crewai sanitiza o nome dado no decorator pra function calling
+# ("Buscar na base de conhecimento" virava
+# `buscar_na_base_de_conhecimento`), e nome longo em português deu typo
+# real do LLM em produção: chamou `buscar_na_base_de_conshcimento` →
+# "Tool not found" (UNKNOWN_TOOL). Nome curto e sem preposição reduz a
+# chance de o modelo reescrever errado.
 
 from casas_bahia_rag.composicao_conselho import contexto_composicao_conselho
 from casas_bahia_rag.dados_financeiros import (
@@ -17,7 +23,7 @@ from casas_bahia_rag.dados_financeiros import (
 from casas_bahia_rag.knowledge_config import buscar_contexto
 
 
-@tool("Consultar resultado financeiro")
+@tool("consultar_resultado_financeiro")
 def consultar_resultado_financeiro(
     ano: int | None = None,
     periodo: Literal["trimestre", "ano"] = "trimestre",
@@ -42,7 +48,7 @@ def consultar_resultado_financeiro(
     return resultado or "Nenhum dado estruturado de resultado financeiro disponível pra esse período."
 
 
-@tool("Consultar série histórica de resultado financeiro")
+@tool("consultar_serie_historica_resultado")
 def consultar_serie_historica_resultado(
     ano_inicio: int | None = None,
     ano_fim: int | None = None,
@@ -53,10 +59,10 @@ def consultar_serie_historica_resultado(
     pergunta de tendência ou comparação ao longo de um período, NÃO de um
     trimestre/ano isolado: "algum trimestre teve lucro entre X e Y", "como
     evoluiu o resultado", "desde quando dá prejuízo", "compare 2022 com
-    2024". NÃO use "Consultar resultado financeiro" pra esse tipo de
+    2024". NÃO use `consultar_resultado_financeiro` pra esse tipo de
     pergunta — ela só devolve um ponto (um trimestre ou ano por vez), não
     serve pra varrer um intervalo; e NÃO tente montar a série chamando
-    "Consultar resultado financeiro" várias vezes ano a ano, essa tool já
+    `consultar_resultado_financeiro` várias vezes ano a ano, essa tool já
     devolve tudo de uma vez. `ano_inicio`/`ano_fim` opcionais — **omita os
     dois por padrão** (série completa disponível, 2021 em diante); não
     limite o intervalo por conta própria sem o usuário ter pedido um
@@ -66,14 +72,14 @@ def consultar_serie_historica_resultado(
     return resultado or "Nenhum dado estruturado de série histórica disponível pra esse período."
 
 
-@tool("Consultar composição do conselho e diretoria")
+@tool("consultar_composicao_conselho")
 def consultar_composicao_conselho(confirmar: bool = True) -> str:
     """Retorna a composição atual de Conselho de Administração, Diretoria e
     Conselho Fiscal da Grupo Casas Bahia, direto do Formulário de Referência
     (FRE) estruturado da CVM — sempre a versão mais recente arquivada, já
     refletindo renúncia/eleição recente. Use pra qualquer pergunta sobre
     quem são os membros do conselho, diretores, CEO/presidente ou conselho
-    fiscal; não use a busca na base de conhecimento pra esse tipo de
+    fiscal; não use `buscar_conhecimento` pra esse tipo de
     pergunta, atas de assembleia antigas podem trazer gente que já
     renunciou.
 
@@ -86,16 +92,32 @@ def consultar_composicao_conselho(confirmar: bool = True) -> str:
     return resultado or "Nenhum dado estruturado de composição de conselho disponível."
 
 
-@tool("Buscar na base de conhecimento")
-def buscar_conhecimento(pergunta: str) -> str:
+@tool("buscar_conhecimento")
+def buscar_conhecimento(consulta: str) -> str:
     """Busca trechos relevantes na base de conhecimento institucional da
     Grupo Casas Bahia (site institucional, RI, fatos relevantes, atas de
-    assembleia/administração, demonstrações financeiras em PDF). Use pra
-    estratégia, recuperação judicial, histórico da empresa ou qualquer coisa
+    assembleia/administração, comunicados ao mercado, demonstrações
+    financeiras em PDF). Use pra estratégia, recuperação judicial, histórico
+    da empresa, fechamento de lojas, mudanças de executivos ou qualquer coisa
     narrativa/qualitativa — não pra número de resultado financeiro (prefira
-    "Consultar resultado financeiro") nem pra composição de conselho/
-    diretoria (prefira "Consultar composição do conselho e diretoria")."""
-    chunks = buscar_contexto(pergunta)
+    `consultar_resultado_financeiro`) nem pra composição ATUAL de conselho/
+    diretoria (prefira `consultar_composicao_conselho`).
+
+    A busca é por TERMOS (léxica, estilo full-text sobre documentos formais
+    da CVM), então `consulta` NÃO deve ser a frase do usuário copiada: monte
+    uma consulta autônoma e rica em palavras-chave, no vocabulário que um
+    documento oficial usaria — entidade, assunto, cargo, ano/mês quando
+    houver. Nunca mande follow-up sem contexto ("tem certeza?", "e antes
+    disso?"): reescreva incorporando o assunto da conversa. Prefira termo de
+    documento a jargão: "diretor presidente" em vez de "CEO", "renúncia" e
+    "eleição" em vez de "troca de comando", "fechamento de lojas" em vez de
+    "reduziu operação". Exemplos: usuário "quem era o CEO antes do Renato
+    Franklin?" -> consulta "renúncia diretor presidente eleição Renato
+    Franklin"; usuário "tem certeza sobre o número de lojas?" -> consulta
+    "fechamento de lojas deficitárias quantidade de lojas 2026". Se a
+    primeira busca não trouxer a resposta, tente UMA reformulação com
+    sinônimos formais antes de dizer que não achou."""
+    chunks = buscar_contexto(consulta)
     if not chunks:
         return "Nada relevante encontrado na base de conhecimento pra essa pergunta."
     return "\n\n---\n\n".join(chunks)

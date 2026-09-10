@@ -4,8 +4,8 @@ CVM), prepara o corpus e constrói a base de conhecimento (embedding) usada
 pelo CasasBahiaRagFlow (chat). Roda uma vez (ou quando quiser atualizar os
 dados) — não é conversacional, não reroda a cada pergunta do usuário.
 
-Cada etapa é Python puro (sem LLM) até a última, que constrói o Agent e
-dispara o embedding via Ollama.
+Cada etapa é Python puro (sem LLM); a última indexa no Qdrant (embedding
+denso via Ollama + BM25 local), incremental por manifesto.
 """
 import sys
 from pathlib import Path
@@ -87,16 +87,16 @@ class IngestFlow(Flow[IngestState]):
 
     @listen(preparar_corpus)
     def embutir_conhecimento(self):
-        # Bypassa Knowledge/TextFileKnowledgeSource: essa API de alto nível
-        # não repassa metadata pro storage (campo "Currently unused" na lib
-        # instalada, ver STATE.md), o que impedia filtrar/ordenar por
-        # categoria e data de verdade na busca. Escreve direto no
-        # ChromaDBClient (kc.cliente_rag()), que suporta metadata nativa.
+        # Índice Qdrant (qdrant_store.py): cada chunk entra com vetor denso
+        # (Ollama) e esparso BM25 (fastembed), metadata do sidecar no
+        # payload. Não usa o Knowledge/TextFileKnowledgeSource do CrewAI
+        # (não repassa metadata) nem o wrapper crewai.rag.qdrant (só denso).
         import os
 
         from casas_bahia_rag import knowledge_config as kc
+        from casas_bahia_rag import qdrant_store as qs
 
-        cliente = kc.cliente_rag()
+        qs.garantir_colecao()
         arquivos = sorted(kc.KNOWLEDGE_DIR.glob("*.txt"))
         pendentes = kc.arquivos_pendentes(arquivos)
         if not pendentes:
@@ -118,16 +118,11 @@ class IngestFlow(Flow[IngestState]):
             self.state.knowledge_pronto = True
             return
 
-        print(f"{len(pendentes)} arquivo(s) novo(s)/mudado(s) pra embedar.")
+        print(f"{len(pendentes)} arquivo(s) novo(s)/mudado(s) pra indexar.")
         for caminho in pendentes:
-            documentos = kc.montar_documentos(caminho)
-            if not documentos:
-                continue
-            cliente.add_documents(
-                collection_name=kc.COLLECTION_NAME, documents=documentos
-            )
-            kc.atualizar_manifesto([caminho], n_chunks={caminho.name: len(documentos)})
-            print(f"  {caminho.name}: {len(documentos)} chunks embedados")
+            n = qs.indexar_arquivo(caminho)
+            kc.atualizar_manifesto([caminho], n_chunks={caminho.name: n})
+            print(f"  {caminho.name}: {n} chunks indexados")
         self.state.knowledge_pronto = True
 
 
