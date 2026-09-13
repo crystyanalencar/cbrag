@@ -3,6 +3,14 @@ __pycache__/
 lib/
 .DS_Store
 
+# STATE.md fica na raiz por convenção (skill /retomar-sessao espera aqui),
+# mas é doc de processo — fora do repo publicado
+STATE.md
+
+# AGENTS.md/PORTFOLIO.md moraram em _notas/ dentro do repo; agora ficam
+# em ../casas_bahia_rag-notas (fora da árvore deste repo, nem precisa de
+# regra de ignore aqui)
+
 # corpus baixado pelos scripts (crawl_wayback.py, baixar_cvm.py) — reproduzível, não versionar
 data/corpus/
 data/pdfs/
@@ -17,3 +25,9 @@ data/knowledge_storage/
 
 # log local de eventos do chat (tool calls, respostas) — ver local_tracing.py
 data/logs/
+
+# modelo BM25 do fastembed baixado em runtime (docker-compose: FASTEMBED_CACHE_PATH)
+data/fastembed_cache/
+
+# pasta de sessão/upload que o Chainlit cria em runtime — lixo por sessão
+.files/

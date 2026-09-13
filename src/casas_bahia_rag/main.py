@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Chatbot RAG conversacional sobre a Grupo Casas Bahia (institucional +
 RI + financeiro/CVM). Base já embedada pelo IngestFlow (ver
-knowledge_config.py); geração via Gemini.
+knowledge_config.py); geração via OpenRouter (preset com fallback entre
+modelos gratuitos configurado no próprio painel do OpenRouter).
 
 Retrieval é feito via **tool-calling** do próprio Agent (tools.py), não
 mais por roteamento manual por palavra-chave — confirmado na doc oficial
@@ -13,12 +14,6 @@ baseado na pergunta, em vez de nós prevermos isso com uma lista fixa de
 termo (roteamento por palavra-chave que existiu até a fase 3.2).
 """
 import logging
-import re
-import time
-from datetime import date
-
-import litellm
-from google.genai.errors import APIError as GeminiAPIError
 
 from crewai import Agent, Flow
 from crewai.flow.conversational import ConversationConfig, ConversationState
@@ -26,15 +21,15 @@ from crewai.flow.flow import listen
 
 from casas_bahia_rag import local_tracing
 from casas_bahia_rag.knowledge_config import (  # noqa: F401
-    GEMINI_LLM,
-    GROQ_LLM,
     OLLAMA_LLM,
+    OPENROUTER_LLM,
 )
 
 local_tracing.ativar()
 from casas_bahia_rag.tools.rag_tools import (
     buscar_conhecimento,
     consultar_composicao_conselho,
+    consultar_documentos_recentes,
     consultar_resultado_financeiro,
     consultar_serie_historica_resultado,
 )
@@ -42,8 +37,8 @@ from casas_bahia_rag.tools.rag_tools import (
 # Workaround de bug do crewai (não nosso app): a lib sempre marca as
 # mensagens com 'cache_breakpoint' (feature de prompt caching), mas só o
 # provider nativo Anthropic sabe remover essa chave antes de mandar pra
-# API — o fallback litellm (usado pro Groq abaixo) repassa a chave crua,
-# que a API do Groq rejeita ("property cache_breakpoint is unsupported").
+# API — o litellm (usado pro OpenRouter abaixo) repassa a chave crua, que
+# a API upstream rejeita ("property cache_breakpoint is unsupported").
 # Não usamos Anthropic nesse projeto, então desativa a marcação global em
 # vez de reimplementar o strip que falta upstream.
 import crewai.llms.cache as _crewai_cache  # noqa: E402
@@ -54,11 +49,11 @@ _TOOLS = [
     consultar_resultado_financeiro,
     consultar_serie_historica_resultado,
     consultar_composicao_conselho,
+    consultar_documentos_recentes,
     buscar_conhecimento,
 ]
 
 _agent: Agent | None = None
-_fallback_agent: Agent | None = None
 
 
 _ROLE = "Especialista em Relações com Investidores e Institucional da Grupo Casas Bahia"
@@ -69,6 +64,16 @@ _GOAL = (
     "fonte e data só quando o usuário pedir pra confirmar a origem."
 )
 _BACKSTORY = (
+    "Você é exclusivamente o Especialista em RI e Institucional da Grupo "
+    "Casas Bahia descrito acima — nunca se descreva como modelo de "
+    "linguagem genérico, nunca mencione empresa/provedor que te treinou, "
+    "nem responda 'o que você é capaz de fazer' com uma lista genérica de "
+    "habilidades de LLM. Se perguntarem o que você faz, responda em "
+    "termos do seu papel aqui: responder sobre a Grupo Casas Bahia "
+    "(financeiro, governança, institucional, recuperação judicial) usando "
+    "as tools disponíveis. Responda sempre em português do Brasil, "
+    "nunca troque de idioma no meio da conversa mesmo que o usuário "
+    "escreva em outro idioma ou a conversa fique longa. "
     "Você conhece a fundo os documentos institucionais e regulatórios "
     "da Grupo Casas Bahia. Sempre que a pergunta puder ser respondida "
     "com informação da empresa (institucional, governança, "
@@ -99,13 +104,27 @@ _BACKSTORY = (
     "apareceu na resposta, NUNCA invente uma explicação de sistema "
     "('estava configurado até X', 'limite da base') — isso é fabricação. "
     "Chame a tool de novo sem filtro de período e responda com o que "
-    "vier; se ainda assim faltar, diga que não sabe o motivo. "
-    f"A data de hoje é {date.today().isoformat()} — use-a pra resolver "
-    "'atual', 'recente', 'até hoje', 'este ano' e pra saber qual é o ano "
-    "corrente. Pergunta com intervalo até 'hoje'/'atualmente' inclui o "
-    "ano corrente, não só os anos fechados: nunca pare a varredura de "
-    "`buscar_conhecimento` no ano anterior."
+    "vier; se ainda assim faltar, diga que não sabe o motivo. Se o "
+    "usuário contestar um fato que você já respondeu com base em "
+    "busca (ex.: dizer que foi recuperação extrajudicial, não "
+    "judicial, ou o contrário), NUNCA troque de posição só porque "
+    "ele afirmou algo diferente — chame a tool de novo com uma "
+    "consulta mais específica pra esse ponto e responda com base no "
+    "que a busca nova trouxer, mesmo que confirme a resposta "
+    "anterior. Concordar ou se desculpar sem checar a fonte de novo "
+    "é fabricação, igual inventar um número. "
+    "A data de hoje vem no fim do prompt ('Current Date') — use-a pra "
+    "resolver 'atual', 'recente', 'até hoje', 'este ano' e pra saber qual "
+    "é o ano corrente. Pergunta com intervalo até 'hoje'/'atualmente' "
+    "inclui o ano corrente, não só os anos fechados: nunca pare a "
+    "varredura de `buscar_conhecimento` no ano anterior."
 )
+
+# session_ids cujo turno o usuário interrompeu na UI (chainlit_app.parar).
+# A thread do handle_turn não é cancelável e termina sozinha; sem isso a
+# resposta que ninguém viu entraria no histórico e o próximo turno
+# "lembraria" dela.
+TURNOS_CANCELADOS: set[str] = set()
 
 
 def rag_agent() -> Agent:
@@ -121,91 +140,39 @@ def rag_agent() -> Agent:
         goal=_GOAL,
         backstory=_BACKSTORY,
         tools=_TOOLS,
-        llm=GEMINI_LLM,
+        llm=OPENROUTER_LLM,
+        # Sem isso, modelo grátis do preset pode ficar reformulando a mesma
+        # busca indefinidamente sem nunca decidir responder (visto na
+        # prática: ~20 chamadas de tool em 4min pra uma pergunta só, sem
+        # resultado) — cap duro no framework, não depende do modelo parar
+        # sozinho. Default do CrewAI é 25. `max_execution_time` NÃO vale
+        # neste caminho: `_prepare_kickoff` só repassa max_iter pro
+        # AgentExecutor; o timeout só existe em `execute_task()` (Crew).
+        max_iter=8,
+        # Data recalculada a cada kickoff (`Prompts._build_date_block`), não
+        # no import — container que fica semanas no ar continuaria achando
+        # que "hoje" é o dia do boot.
+        inject_date=True,
+        date_format="%Y-%m-%d",
     )
     return _agent
 
 
-def fallback_agent() -> Agent:
-    """Mesmo agente, mesmas tools, LLM Groq — usado só quando o Gemini
-    devolve 503 (sobrecarga) ou 429 (cota diária esgotada), ver
-    `_kickoff_com_fallback` abaixo."""
-    global _fallback_agent
-    if _fallback_agent is not None:
-        return _fallback_agent
-
-    _fallback_agent = Agent(
-        role=_ROLE,
-        goal=_GOAL,
-        backstory=_BACKSTORY,
-        tools=_TOOLS,
-        llm=GROQ_LLM,
-    )
-    return _fallback_agent
-
-
-_ERROS_TEMPORARIOS = (GeminiAPIError, litellm.RateLimitError, litellm.ServiceUnavailableError)
-_ESPERA_MAXIMA_SEGUNDOS = 20.0  # nunca trava o chat esperando cota diária
-
-
-def _segundos_de_retry(erro: Exception) -> float | None:
-    """Extrai o tempo de espera sugerido pelo provider (quando existe).
-    Groq manda "Please try again in 14.06999s" na mensagem; Gemini manda
-    um RetryInfo estruturado com campo `retryDelay` tipo "14s" dentro de
-    `details`. Sem isso no erro, não dá pra saber se vale esperar."""
-    texto = f"{erro} {getattr(erro, 'details', '')}"
-    m = re.search(r"try again in ([\d.]+)\s*s", texto, re.IGNORECASE)
-    if m:
-        return float(m.group(1))
-    m = re.search(r"retryDelay['\"]?\s*[:=]\s*['\"]?(\d+(?:\.\d+)?)s", texto)
-    if m:
-        return float(m.group(1))
-    return None
-
-
-def _kickoff_com_retry(agente: Agent, mensagens) -> str:
-    """1 retry automático quando o provider sugere uma espera curta (rate
-    limit por minuto/segundo, ex. TPM do Groq) — não adianta pra cota
-    diária esgotada (TPD/RPD), o `retryDelay` nesse caso vem bem maior que
-    `_ESPERA_MAXIMA_SEGUNDOS`, então nem tenta esperar."""
+def _kickoff(mensagens) -> str:
+    """Sem retry/fallback manual aqui — o preset do OpenRouter
+    (knowledge_config.OPENROUTER_LLM) já cobre fallback entre modelos
+    gratuitos do próprio lado do provider. Gateway do OpenRouter devolve
+    200 OK mesmo quando o upstream falha (erro vem no corpo, não no
+    status HTTP, ver docs.crewai.com/en/concepts/llms) — captura ampla
+    aqui é só pra não derrubar o chat, não é retry de verdade."""
     try:
-        return agente.kickoff(mensagens).raw
-    except _ERROS_TEMPORARIOS as erro:
-        espera = _segundos_de_retry(erro)
-        if espera is None or espera > _ESPERA_MAXIMA_SEGUNDOS:
-            raise
-        time.sleep(espera)
-        return agente.kickoff(mensagens).raw
-
-
-def _kickoff_com_fallback(mensagens) -> str:
-    """Tenta o Gemini primeiro (com 1 retry se o erro sugerir espera curta,
-    ver `_kickoff_com_retry`); em 503 (sobrecarga) ou 429 (cota) — já
-    reproduzidos de verdade, ver STATE.md — cai pro Groq (idem, com seu
-    próprio retry) em vez de propagar o erro pro usuário."""
-    try:
-        return _kickoff_com_retry(rag_agent(), mensagens)
-    except GeminiAPIError as erro:
-        if erro.code not in (429, 503):
-            raise
-        try:
-            return _kickoff_com_retry(fallback_agent(), mensagens)
-        except _ERROS_TEMPORARIOS as erro_groq:
-            # Já é o fallback — não tem pra onde cair depois disso. Erro
-            # mais comum aqui: "Request too large" (uma chamada só já passa
-            # do TPM do Groq por causa do histórico de conversa acumulado +
-            # backstory + schema das tools) — retry não ajuda nunca nesse
-            # caso, a chamada continua grande do mesmo jeito. Sem isso o
-            # erro cru derrubava o chat inteiro.
-            logging.getLogger(__name__).error(
-                "Gemini e Groq indisponíveis: %s", erro_groq
-            )
-            return (
-                "Não consegui responder agora — Gemini e Groq (fallback) "
-                "estão indisponíveis no momento. Tente de novo em alguns "
-                "minutos, ou pergunte algo mais curto (conversas longas "
-                "aumentam a chance de estourar o limite do Groq)."
-            )
+        return rag_agent().kickoff(mensagens).raw
+    except Exception:
+        logging.getLogger(__name__).exception("Erro chamando o LLM via OpenRouter")
+        return (
+            "Não consegui responder agora — o provedor de LLM está "
+            "indisponível no momento. Tente de novo em alguns instantes."
+        )
 
 
 @ConversationConfig(defer_trace_finalization=True)
@@ -221,10 +188,11 @@ class CasasBahiaRagFlow(Flow[ConversationState]):
         sozinho, via tool-calling, se/quando consultar a base de
         conhecimento ou a DRE estruturada. Histórico da conversa
         (conversation_messages) já vem pronto do ConversationalMixin, não
-        precisa de contexto pré-injetado na mensagem. Cai pro Groq
-        automaticamente se o Gemini estiver sobrecarregado/sem cota, ver
-        `_kickoff_com_fallback`."""
-        reply = _kickoff_com_fallback(self.conversation_messages)
+        precisa de contexto pré-injetado na mensagem."""
+        reply = _kickoff(self.conversation_messages)
+        if self.state.id in TURNOS_CANCELADOS:
+            TURNOS_CANCELADOS.discard(self.state.id)
+            return reply
         self.append_assistant_message(reply)
         return reply
 

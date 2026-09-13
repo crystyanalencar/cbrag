@@ -33,19 +33,12 @@ CHUNK_OVERLAP = 200
 RESULTS_LIMIT = 8
 
 OLLAMA_LLM = "ollama/gemma4:e4b"
-# Geração via Gemini (fase 2, ver STATE.md) — lê GOOGLE_API_KEY/GEMINI_API_KEY
-# do .env (carregado automaticamente pelo crewai.llm via load_dotenv()).
-# Flash-Lite em vez de Flash puro: free tier bem mais folgado (15 RPM/1000
-# RPD vs 10 RPM/250 RPD do 2.5 Flash) — resolve os 429 de cota diária
-# batidos em sessão anterior.
-GEMINI_LLM = "gemini/gemini-3.1-flash-lite"
-# Fallback pro 503 (sobrecarga)/429 (cota diária) do Gemini — via litellm
-# (`uv add "crewai[litellm]"`), lê GROQ_API_KEY do .env. Modelo escolhido:
-# "llama-3.3-70b-versatile" e "llama-3.1-8b-instant" (nomes mais comuns)
-# davam 404 nessa conta/key ("does not exist or you do not have access to
-# it") — só `openai/gpt-oss-120b` respondeu; suporta tool-calling, testado
-# ponta a ponta.
-GROQ_LLM = "groq/openai/gpt-oss-120b"
+# Geração via OpenRouter (fase 4, ver STATE.md) — substituiu Gemini+Groq
+# manual. Lê OPENROUTER_API_KEY do .env (via litellm, `crewai[litellm]`,
+# já instalado pro Groq antigo). Preset free-tier (fase de testes) — ver
+# STATE.md pro achado de modelo grátis ignorando resultado de tool em
+# conversa longa antes de fechar isso pra produção.
+OPENROUTER_LLM = "openrouter/@preset/free-tier-first"
 
 
 def _hash_arquivo(caminho: Path) -> str:

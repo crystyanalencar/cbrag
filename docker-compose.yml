@@ -1,0 +1,31 @@
+services:
+  chat:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"  # Cloudflare Tunnel aponta pra localhost, não expor direto
+    env_file:
+      - .env
+    environment:
+      # Conversa dos usuários não sai do host: sem trace pro app.crewai.com.
+      # Log local fica em data/logs/eventos.jsonl (local_tracing.py).
+      CREWAI_TRACING_ENABLED: "false"
+      CREWAI_DISABLE_TELEMETRY: "true"
+      # fastembed baixa o modelo BM25 do HuggingFace no 1º uso; sem cache
+      # persistente, todo container novo depende de rede/HF pra responder.
+      FASTEMBED_CACHE_PATH: /app/data/fastembed_cache
+    volumes:
+      # Caminhos relativos ao diretório do projeto no host — funciona em
+      # qualquer máquina, não amarrado a estrutura de disco específica.
+      # `.dockerignore` exclui `data/` da imagem, então tudo que o chat lê
+      # em runtime precisa estar montado aqui.
+      - ./data/knowledge_storage:/app/data/knowledge_storage   # índice Qdrant, gerado por `uv run ingest`
+      - ./data/cvm_estruturado:/app/data/cvm_estruturado:ro    # DRE + conselho (versionado no git)
+      - ./data/knowledge:/app/data/knowledge:ro                # _metadata.json + txt, gerado por `uv run ingest` (gitignored)
+      - ./data/fastembed_cache:/app/data/fastembed_cache
+      - ./data/logs:/app/data/logs
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G

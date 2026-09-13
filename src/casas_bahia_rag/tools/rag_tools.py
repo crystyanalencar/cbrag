@@ -20,6 +20,7 @@ from casas_bahia_rag.dados_financeiros import (
     contexto_resultado_financeiro,
     serie_resultado_financeiro,
 )
+from casas_bahia_rag.documentos_recentes import CATEGORIAS, listar_documentos_recentes
 from casas_bahia_rag.knowledge_config import buscar_contexto
 
 
@@ -83,13 +84,66 @@ def consultar_composicao_conselho(confirmar: bool = True) -> str:
     pergunta, atas de assembleia antigas podem trazer gente que já
     renunciou.
 
+    ATENÇÃO ao ler as datas `eleito em`/`posse em`: é a data da ÚLTIMA
+    eleição/reeleição registrada no FRE, não a data em que a pessoa
+    assumiu o cargo pela primeira vez — FRE é reenviado a cada assembleia,
+    e reeleição (comum, mandato costuma ser anual) atualiza essa data sem
+    a pessoa ter saído do cargo. Pra pergunta sobre quando alguém ASSUMIU/
+    ENTROU pela primeira vez num cargo (ex. "quando o Renato Franklin virou
+    CEO"), essa data NÃO é a resposta — use `buscar_conhecimento` (fato
+    relevante/ata da eleição original) pra isso, e se as duas fontes
+    trouxerem datas diferentes pra "quando entrou", explique a diferença
+    (posse original vs. última reeleição) em vez de escolher uma só.
+
     `confirmar` é parâmetro dummy, ignore-o — não precisa passar nada.
-    Existe só porque o Groq (fallback, ver STATE.md) rejeita em modo strict
-    qualquer tool sem nenhum parâmetro (trata `properties: {}` como
-    ausente, confirmado inspecionando o corpo HTTP real — bug do lado do
-    provider, não do litellm/crewai)."""
+    Existe porque o Groq (usado antes como fallback, ver STATE.md) rejeitava
+    em modo strict qualquer tool sem nenhum parâmetro (tratava
+    `properties: {}` como ausente, confirmado inspecionando o corpo HTTP
+    real — bug do lado do provider, não do litellm/crewai). Mantido mesmo
+    depois da troca pro preset OpenRouter (fase 4) porque o preset pode
+    rotear pra modelos com a mesma limitação — sem custo manter."""
     resultado = contexto_composicao_conselho()
     return resultado or "Nenhum dado estruturado de composição de conselho disponível."
+
+
+@tool("consultar_documentos_recentes")
+def consultar_documentos_recentes(
+    categoria: str,
+    quantidade: int = 5,
+    ano: int | None = None,
+) -> str:
+    """Lista os documentos MAIS RECENTES de uma categoria de arquivamento da
+    Grupo Casas Bahia na CVM, ordenados pela data de entrega (mais recente
+    primeiro), com trecho do conteúdo dos primeiros — lista determinística
+    lida da metadata, SEM busca por termo. Use pra qualquer pergunta de
+    ordem no tempo: "último/mais recente X", "últimos N X", "o que saiu
+    recentemente", "quais X de <ano>" (passe `ano`), "o que a empresa
+    divulgou sobre a recuperação judicial" (categoria de RJ).
+
+    `categoria` aceita, com ou sem acento/plural: "Fato Relevante",
+    "Comunicado ao Mercado", "Assembleia" (atas, editais, mapas de votação),
+    "Reunião da Administração" (atas de conselho/diretoria), "Aviso aos
+    Acionistas", "Dados Econômico-Financeiros" (releases e DFs),
+    "Informações de Companhias em Recuperação Judicial ou Extrajudicial"
+    (petições e sentenças da RJ), "Calendário de Eventos Corporativos".
+
+    NUNCA use `buscar_conhecimento` pra descobrir QUAL é o mais recente —
+    ela busca por termo e não sabe ordenar por data, devolve documento
+    antigo com o termo forte. Fluxo certo: esta tool primeiro (diz qual é e
+    a data, e o trecho costuma bastar); só se precisar de detalhe além do
+    trecho, aí `buscar_conhecimento` com o assunto exato + data. Se a
+    resposta desta tool já responde a pergunta, responda direto — não
+    confirme com outras buscas. Cobre só arquivamentos na CVM (não o site
+    institucional)."""
+    resultado = listar_documentos_recentes(categoria, quantidade=quantidade, ano=ano)
+    if resultado:
+        return resultado
+    validas = "; ".join(CATEGORIAS)
+    return (
+        f"Nenhum documento encontrado pra categoria '{categoria}'"
+        + (f" em {ano}" if ano is not None else "")
+        + f". Categorias válidas: {validas}."
+    )
 
 
 @tool("buscar_conhecimento")
@@ -100,8 +154,11 @@ def buscar_conhecimento(consulta: str) -> str:
     financeiras em PDF). Use pra estratégia, recuperação judicial, histórico
     da empresa, fechamento de lojas, mudanças de executivos ou qualquer coisa
     narrativa/qualitativa — não pra número de resultado financeiro (prefira
-    `consultar_resultado_financeiro`) nem pra composição ATUAL de conselho/
-    diretoria (prefira `consultar_composicao_conselho`).
+    `consultar_resultado_financeiro`), nem pra composição ATUAL de conselho/
+    diretoria (prefira `consultar_composicao_conselho`), nem pra "qual o
+    último/mais recente X" ou "quais X de tal ano" (prefira
+    `consultar_documentos_recentes` — esta busca é por termo e NÃO sabe
+    ordenar por data; reformular a consulta não resolve isso).
 
     A busca é por TERMOS (léxica, estilo full-text sobre documentos formais
     da CVM), então `consulta` NÃO deve ser a frase do usuário copiada: monte
