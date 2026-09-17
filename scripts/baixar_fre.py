@@ -29,7 +29,7 @@ OUT_FILE = ROOT / "data/cvm_estruturado/conselho.json"
 CNPJ_COMPANHIA = "33.041.260/0652-90"
 NOME_ARQUIVO_CSV = "fre_cia_aberta_administrador_membro_conselho_fiscal_{ano}.csv"
 ANOS_TENTATIVA = (2026, 2025)  # ano corrente primeiro; cai pro anterior se ainda não arquivado
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; casas-bahia-rag-crawler/1.0)"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; cbrag-crawler/1.0)"}
 
 COLUNAS_UTEIS = (
     "Nome", "Orgao_Administracao", "Cargo_Eletivo_Ocupado",

@@ -1,5 +1,5 @@
 """Configuração compartilhada da base de conhecimento, usada pelo
-IngestFlow (grava) e pelo CasasBahiaRagFlow (só lê): caminhos, chunking,
+IngestFlow (grava) e pelo CbragFlow (só lê): caminhos, chunking,
 manifesto incremental, montagem de documentos com metadata e a busca que o
 chat usa. O motor (Qdrant, denso + BM25) fica em qdrant_store.py.
 
@@ -171,6 +171,6 @@ def buscar_resultados(pergunta: str) -> list[dict]:
     contra o golden sem depender do LLM. Sem roteamento por categoria nem
     blend de recência: eram remendos pra diluição da busca vetorial, e o
     BM25 sem eles já supera o Chroma com eles no golden."""
-    from casas_bahia_rag import qdrant_store  # import local: qdrant_store importa este módulo
+    from cbrag import qdrant_store  # import local: qdrant_store importa este módulo
 
     return qdrant_store.buscar(pergunta, modo=qdrant_store.MODO_CHAT)

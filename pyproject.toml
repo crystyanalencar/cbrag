@@ -1,7 +1,7 @@
 [project]
-name = "casas_bahia_rag"
+name = "cbrag"
 version = "0.1.0"
-description = "casas_bahia_rag using crewAI"
+description = "cbrag using crewAI"
 authors = [{ name = "Your Name", email = "you@example.com" }]
 requires-python = ">=3.10,<3.14"
 dependencies = [
@@ -15,9 +15,9 @@ dependencies = [
 ]
 
 [project.scripts]
-kickoff = "casas_bahia_rag.main:kickoff"
-chat = "casas_bahia_rag.main:chat"
-ingest = "casas_bahia_rag.ingest_flow:kickoff"
+kickoff = "cbrag.main:kickoff"
+chat = "cbrag.main:chat"
+ingest = "cbrag.ingest_flow:kickoff"
 
 [build-system]
 requires = ["hatchling"]

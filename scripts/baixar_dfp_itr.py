@@ -29,7 +29,7 @@ OUT_FILE = ROOT / "data/cvm_estruturado/dre.json"
 CODIGO_CVM = "006505"
 ANOS = range(2021, 2027)
 TIPOS = ("ITR", "DFP")
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; casas-bahia-rag-crawler/1.0)"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; cbrag-crawler/1.0)"}
 
 COLUNAS_UTEIS = (
     "DT_REFER", "VERSAO", "ORDEM_EXERC", "DT_INI_EXERC", "DT_FIM_EXERC",

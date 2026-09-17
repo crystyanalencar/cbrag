@@ -32,5 +32,5 @@ ENV HOME=/home/app
 
 EXPOSE 8000
 
-CMD ["uv", "run", "chainlit", "run", "src/casas_bahia_rag/chainlit_app.py", \
+CMD ["uv", "run", "chainlit", "run", "src/cbrag/chainlit_app.py", \
      "--host", "0.0.0.0", "--port", "8000", "--headless"]

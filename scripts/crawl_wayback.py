@@ -16,7 +16,7 @@ CDX_FILES = [ROOT / "data/cdx/cdx_main.json", ROOT / "data/cdx/cdx_ri.json"]
 CORPUS_DIR = ROOT / "data/corpus"
 PDF_DIR = ROOT / "data/pdfs"
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; casas-bahia-rag-crawler/1.0)"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; cbrag-crawler/1.0)"}
 MIN_TEXT_LEN = 200
 TENTATIVAS = 4
 # Circuit breaker: falha de conexão/timeout consecutiva (não 404/vazio)

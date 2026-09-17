@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>cbrag — docs</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0033c6;
+    --navy-dark: #0d355f;
+    --bg: #fcfcfc;
+    --hairline: #e0e0e0;
+    --text: #231f20;
+    --muted: #696969;
+    --serif: "Source Serif 4", Georgia, serif;
+    --sans: "Inter", system-ui, sans-serif;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1416; --hairline: #262e31; --text: #eef1f2; --muted: #9aa7ab; --navy: #6f9bff; --navy-dark: #9dbdff;
+  }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    text-align: center;
+    position: relative;
+  }
+  main { max-width: 28rem; padding: 2rem; }
+  h1 { font-family: var(--serif); font-weight: 600; color: var(--navy-dark); font-size: 1.5rem; }
+  p { color: var(--muted); }
+  a { color: var(--navy); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .theme-toggle {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    background: none;
+    border: 1px solid var(--hairline);
+    color: var(--muted);
+    border-radius: 999px;
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .theme-toggle:hover { border-color: var(--navy); color: var(--navy); }
+</style>
+</head>
+<body>
+<button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema claro/escuro" title="Alternar tema">🌙</button>
+<main>
+  <h1>Docs em construção</h1>
+  <p><a href="/">← voltar</a> · <a href="/chat/">ir pro chat →</a></p>
+</main>
+<script>
+  (function () {
+    try {
+      var saved = localStorage.getItem("cbrag-theme");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) {}
+    document.addEventListener("DOMContentLoaded", function () {
+      var btn = document.getElementById("theme-toggle");
+      var root = document.documentElement;
+      function sync() {
+        var isDark = root.getAttribute("data-theme") === "dark";
+        btn.textContent = isDark ? "☀️" : "🌙";
+      }
+      btn.addEventListener("click", function () {
+        var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem("cbrag-theme", next); } catch (e) {}
+        sync();
+      });
+      sync();
+    });
+  })();
+</script>
+</body>
+</html>

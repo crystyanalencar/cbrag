@@ -23,8 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from casas_bahia_rag import knowledge_config as kc  # noqa: E402
-from casas_bahia_rag import qdrant_store as qs  # noqa: E402
+from cbrag import knowledge_config as kc  # noqa: E402
+from cbrag import qdrant_store as qs  # noqa: E402
 
 GOLDEN = ROOT / "tests" / "golden_retrieval.json"
 

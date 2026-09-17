@@ -12,7 +12,7 @@ similaridade — mesmo princípio de `dados_financeiros.py` e
 import re
 import unicodedata
 
-from casas_bahia_rag.knowledge_config import KNOWLEDGE_DIR, _ler_metadata_sidecar
+from cbrag.knowledge_config import KNOWLEDGE_DIR, _ler_metadata_sidecar
 
 # Valores exatos de `categoria_cvm` (CSV IPE da CVM) que valem listar.
 CATEGORIAS = [

@@ -35,7 +35,7 @@ from crewai.events.types.tool_usage_events import (
     ToolUsageFinishedEvent,
 )
 
-from casas_bahia_rag.knowledge_config import ROOT
+from cbrag.knowledge_config import ROOT
 
 LOG_DIR = ROOT / "data" / "logs"
 LOG_PATH = LOG_DIR / "eventos.jsonl"
@@ -56,7 +56,7 @@ def _handler() -> logging.Logger:
             LOG_PATH, maxBytes=TAMANHO_MAX_BYTES, backupCount=ARQUIVOS_ROTACAO, encoding="utf-8"
         )
         handler.setFormatter(logging.Formatter("%(message)s"))
-        logger = logging.getLogger("casas_bahia_rag.eventos")
+        logger = logging.getLogger("cbrag.eventos")
         logger.setLevel(logging.INFO)
         logger.propagate = False
         logger.addHandler(handler)

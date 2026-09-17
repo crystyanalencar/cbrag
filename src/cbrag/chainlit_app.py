@@ -1,5 +1,5 @@
 """Interface web do chatbot RAG, via Chainlit. Camada de interface só —
-reusa o `CasasBahiaRagFlow` de `main.py` (tools, LLM via OpenRouter,
+reusa o `CbragFlow` de `main.py` (tools, LLM via OpenRouter,
 histórico) sem duplicar lógica.
 
 Usa `flow.handle_turn(mensagem, session_id=...)`, a API oficial do CrewAI
@@ -11,11 +11,11 @@ histórico em `state.messages` por `session_id`, em vez de `flow.chat()`
 `handle_turn` já cobre isso, incluindo `route_turn`.
 
 `ConversationConfig(defer_trace_finalization=True)`, já configurado em
-`CasasBahiaRagFlow`, mantém 1 lote de trace aberto por sessão em vez de 1
+`CbragFlow`, mantém 1 lote de trace aberto por sessão em vez de 1
 por turno — por isso finaliza no fim da sessão do Chainlit
 (`on_chat_end`), não a cada mensagem.
 
-Rodar: `uv run chainlit run src/casas_bahia_rag/chainlit_app.py`
+Rodar: `uv run chainlit run src/cbrag/chainlit_app.py`
 """
 import logging
 import time
@@ -27,8 +27,8 @@ from chainlit.message import Message as _ClMessage
 from chainlit.server import sio as _sio
 from chainlit.session import WebsocketSession as _WebsocketSession
 
-from casas_bahia_rag import local_tracing
-from casas_bahia_rag.main import TURNOS_CANCELADOS, CasasBahiaRagFlow
+from cbrag import local_tracing
+from cbrag.main import TURNOS_CANCELADOS, CbragFlow
 
 _FLOW = "flow"
 _SESSION_ID = "session_id"
@@ -54,7 +54,7 @@ async def perfis(_usuario):
         cl.ChatProfile(
             name="Casas Bahia RAG",
             markdown_description=_DESCRICAO,
-            icon="/public/avatars/casas_bahia_rag.jpg",
+            icon="/public/avatars/cbrag.svg",
             default=True,
         )
     ]
@@ -62,13 +62,13 @@ async def perfis(_usuario):
 
 @cl.on_chat_start
 async def iniciar():
-    cl.user_session.set(_FLOW, CasasBahiaRagFlow())
+    cl.user_session.set(_FLOW, CbragFlow())
     cl.user_session.set(_SESSION_ID, cl.user_session.get("id"))
 
 
 @cl.on_message
 async def responder(mensagem: cl.Message):
-    flow: CasasBahiaRagFlow | None = cl.user_session.get(_FLOW)
+    flow: CbragFlow | None = cl.user_session.get(_FLOW)
     if flow is None:
         await iniciar()
         flow = cl.user_session.get(_FLOW)
@@ -146,7 +146,7 @@ async def encerrar():
     # que on_chat_start nunca rodou (visto em prod, celular saindo do wifi)
     # — sem Flow não há trace pra fechar; exceção aqui vira toast de erro
     # pro usuário.
-    flow: CasasBahiaRagFlow | None = cl.user_session.get(_FLOW)
+    flow: CbragFlow | None = cl.user_session.get(_FLOW)
     if flow is not None:
         flow.finalize_session_traces()
 

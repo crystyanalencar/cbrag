@@ -13,6 +13,12 @@ services:
       # fastembed baixa o modelo BM25 do HuggingFace no 1º uso; sem cache
       # persistente, todo container novo depende de rede/HF pra responder.
       FASTEMBED_CACHE_PATH: /app/data/fastembed_cache
+      # Vazio por padrão (deploy raiz, ex. homelab local). Só a VM Oracle
+      # define isso no seu .env (não commitado) como "/chat" — Chainlit
+      # registra as rotas com esse prefixo (chainlit/server.py:
+      # `router = APIRouter(prefix=config.run.root_path)`), então o Caddy
+      # da VM encaminha o path inteiro pro container, sem cortar o prefixo.
+      CHAINLIT_ROOT_PATH: ${CHAINLIT_ROOT_PATH:-}
     volumes:
       # Caminhos relativos ao diretório do projeto no host — funciona em
       # qualquer máquina, não amarrado a estrutura de disco específica.

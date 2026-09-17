@@ -24,7 +24,7 @@ INDICE_FILE = PDF_DIR / "_ipe_index.json"
 
 CODIGO_CVM = "6505"  # Grupo Casas Bahia S.A.
 ANOS = range(2021, 2027)
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; casas-bahia-rag-crawler/1.0)"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; cbrag-crawler/1.0)"}
 
 
 def baixar_csv_do_ano(ano: int) -> list[dict]:

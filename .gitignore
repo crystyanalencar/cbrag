@@ -3,13 +3,12 @@ __pycache__/
 lib/
 .DS_Store
 
+# config MCP local (por máquina), não do projeto
+.mcp.json
+
 # STATE.md fica na raiz por convenção (skill /retomar-sessao espera aqui),
 # mas é doc de processo — fora do repo publicado
 STATE.md
-
-# AGENTS.md/PORTFOLIO.md moraram em _notas/ dentro do repo; agora ficam
-# em ../casas_bahia_rag-notas (fora da árvore deste repo, nem precisa de
-# regra de ignore aqui)
 
 # corpus baixado pelos scripts (crawl_wayback.py, baixar_cvm.py) — reproduzível, não versionar
 data/corpus/

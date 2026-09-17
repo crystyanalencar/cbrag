@@ -47,6 +47,9 @@ def contexto_composicao_conselho() -> str | None:
         for l in do_grupo:
             blocos.append(
                 f"- {l['Nome']} — {l['Cargo_Eletivo_Ocupado']} "
-                f"(eleito em {l['Data_Eleicao']}, posse em {l['Data_Posse']})"
+                f"(última eleição/reeleição em {l['Data_Eleicao']}, posse "
+                f"referente a essa eleição em {l['Data_Posse']} — NÃO é "
+                f"necessariamente a data em que a pessoa assumiu o cargo "
+                f"pela 1ª vez, pode ser reeleição de mandato anterior)"
             )
     return "\n".join(blocos)

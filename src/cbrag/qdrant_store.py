@@ -26,7 +26,7 @@ import ollama
 from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient, models
 
-from casas_bahia_rag import knowledge_config as kc
+from cbrag import knowledge_config as kc
 
 QDRANT_PATH = kc.STORAGE_DIR / "qdrant"
 COLLECTION = kc.COLLECTION_NAME

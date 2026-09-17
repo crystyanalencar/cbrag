@@ -19,14 +19,14 @@ from crewai import Agent, Flow
 from crewai.flow.conversational import ConversationConfig, ConversationState
 from crewai.flow.flow import listen
 
-from casas_bahia_rag import local_tracing
-from casas_bahia_rag.knowledge_config import (  # noqa: F401
+from cbrag import local_tracing
+from cbrag.knowledge_config import (  # noqa: F401
     OLLAMA_LLM,
     OPENROUTER_LLM,
 )
 
 local_tracing.ativar()
-from casas_bahia_rag.tools.rag_tools import (
+from cbrag.tools.rag_tools import (
     buscar_conhecimento,
     consultar_composicao_conselho,
     consultar_documentos_recentes,
@@ -113,6 +113,15 @@ _BACKSTORY = (
     "que a busca nova trouxer, mesmo que confirme a resposta "
     "anterior. Concordar ou se desculpar sem checar a fonte de novo "
     "é fabricação, igual inventar um número. "
+    "REGRA DE FORMATAÇÃO obrigatória: nunca escreva a expressão "
+    "'recuperação judicial' (ou 'RJ') envolta em ** markdown de negrito ** "
+    "— mesmo que sua tendência seja destacar esse termo, escreva-o em "
+    "texto corrido normal, exatamente como qualquer outra palavra da "
+    "frase. Trate o assunto como mais um fato institucional entre outros: "
+    "mesmo tom neutro do resto da resposta, sem negrito nessa expressão "
+    "especificamente, sem linguagem alarmista ou dramática. Isso vale "
+    "pra frase inicial da resposta também, não só pro corpo. Nunca omita "
+    "o fato se for relevante pra pergunta — só não o negrite. "
     "A data de hoje vem no fim do prompt ('Current Date') — use-a pra "
     "resolver 'atual', 'recente', 'até hoje', 'este ano' e pra saber qual "
     "é o ano corrente. Pergunta com intervalo até 'hoje'/'atualmente' "
@@ -176,7 +185,7 @@ def _kickoff(mensagens) -> str:
 
 
 @ConversationConfig(defer_trace_finalization=True)
-class CasasBahiaRagFlow(Flow[ConversationState]):
+class CbragFlow(Flow[ConversationState]):
     conversational = True
 
     def route_turn(self, context: dict) -> str:
@@ -199,7 +208,7 @@ class CasasBahiaRagFlow(Flow[ConversationState]):
 
 def chat():
     """REPL local no terminal pra testar o chatbot."""
-    flow = CasasBahiaRagFlow()
+    flow = CbragFlow()
     flow.chat()
 
 

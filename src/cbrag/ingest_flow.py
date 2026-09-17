@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Flow de ingestão: coleta os dados públicos da Grupo Casas Bahia (Wayback +
 CVM), prepara o corpus e constrói a base de conhecimento (embedding) usada
-pelo CasasBahiaRagFlow (chat). Roda uma vez (ou quando quiser atualizar os
+pelo CbragFlow (chat). Roda uma vez (ou quando quiser atualizar os
 dados) — não é conversacional, não reroda a cada pergunta do usuário.
 
 Cada etapa é Python puro (sem LLM); a última indexa no Qdrant (embedding
@@ -93,8 +93,8 @@ class IngestFlow(Flow[IngestState]):
         # (não repassa metadata) nem o wrapper crewai.rag.qdrant (só denso).
         import os
 
-        from casas_bahia_rag import knowledge_config as kc
-        from casas_bahia_rag import qdrant_store as qs
+        from cbrag import knowledge_config as kc
+        from cbrag import qdrant_store as qs
 
         qs.garantir_colecao()
         arquivos = sorted(kc.KNOWLEDGE_DIR.glob("*.txt"))

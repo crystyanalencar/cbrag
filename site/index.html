@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>cbrag — Casas Bahia RAG</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chatbot RAG sobre a Grupo Casas Bahia, construído com CrewAI sobre dados públicos da CVM.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Paleta inspirada na cor institucional da Grupo Casas Bahia
+       (azul #0033C6, confirmado via theme-color do site institucional,
+       Wayback). Nenhum asset de marca (logo) é usado — só a cor. Tema
+       claro por padrão; toggle manual abaixo controla [data-theme]. */
+    --navy: #0033c6;
+    --navy-dark: #0d355f;
+    --navy-mid: #1a4fb0;
+    --accent: #e71a3b;
+    --bg: #fcfcfc;
+    --panel: #ffffff;
+    --hairline: #e0e0e0;
+    --text: #231f20;
+    --muted: #696969;
+    --serif: "Source Serif 4", Georgia, serif;
+    --sans: "Inter", system-ui, sans-serif;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1416;
+    --panel: #161d20;
+    --hairline: #262e31;
+    --text: #eef1f2;
+    --muted: #9aa7ab;
+    --navy: #6f9bff;
+    --navy-mid: #9dbdff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+  }
+  header {
+    border-bottom: 1px solid var(--hairline);
+  }
+  .header-inner {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .wordmark {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--navy);
+    letter-spacing: 0.01em;
+  }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-left: 1.5rem;
+  }
+  nav a:hover { color: var(--navy); }
+  main { max-width: 56rem; margin: 0 auto; padding: 0 1.5rem; }
+  .hero {
+    padding: 5rem 0 3.5rem;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .kicker {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 1rem;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 2.5rem;
+    line-height: 1.25;
+    margin: 0 0 1.25rem;
+    max-width: 34rem;
+    color: var(--navy-dark);
+  }
+  .lede {
+    font-size: 1.05rem;
+    color: var(--muted);
+    max-width: 34rem;
+    margin: 0 0 2rem;
+  }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--navy);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.85rem 1.5rem;
+    border-radius: 0.25rem;
+    transition: background 0.15s ease;
+  }
+  .cta:hover { background: var(--navy-mid); }
+  section { padding: 3rem 0; border-bottom: 1px solid var(--hairline); }
+  section:last-of-type { border-bottom: none; }
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--navy-dark);
+    margin: 0 0 1rem;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1.5rem;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+  }
+  .card h3 {
+    font-family: var(--sans);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+    color: var(--navy-dark);
+  }
+  .card p {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin: 0;
+  }
+  .stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .stack span {
+    border: 1px solid var(--hairline);
+    color: var(--muted);
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+  }
+  a.inline { color: var(--navy); }
+  footer {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .theme-toggle {
+    background: none;
+    border: 1px solid var(--hairline);
+    color: var(--muted);
+    border-radius: 999px;
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+    margin-left: 1.25rem;
+    line-height: 1;
+  }
+  .theme-toggle:hover { border-color: var(--navy); color: var(--navy); }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <span class="wordmark">cbrag</span>
+    <nav>
+      <a href="/chat/">Chat</a>
+      <a href="/docs">Docs</a>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema claro/escuro" title="Alternar tema">🌙</button>
+    </nav>
+  </div>
+</header>
+<script>
+  (function () {
+    try {
+      var saved = localStorage.getItem("cbrag-theme");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) {}
+    document.addEventListener("DOMContentLoaded", function () {
+      var btn = document.getElementById("theme-toggle");
+      var root = document.documentElement;
+      function sync() {
+        var isDark = root.getAttribute("data-theme") === "dark";
+        btn.textContent = isDark ? "☀️" : "🌙";
+      }
+      btn.addEventListener("click", function () {
+        var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem("cbrag-theme", next); } catch (e) {}
+        sync();
+      });
+      sync();
+    });
+  })();
+</script>
+
+<main>
+  <div class="hero">
+    <p class="kicker">Projeto de portfólio — Engenharia de IA</p>
+    <h1>Um agente que responde sobre a Casas Bahia com base em documento, não em memória.</h1>
+    <p class="lede">Cada resposta vem de busca sobre documentos públicos da CVM e do
+    site institucional — inclusive os desenvolvimentos institucionais mais
+    recentes da companhia — nunca do que o modelo "acha" que sabe.</p>
+    <a class="cta" href="/chat/">Conversar com o agente →</a>
+  </div>
+
+  <section>
+    <h2>Como funciona</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Estado atual</h3>
+        <p>Quem é o CEO, quem está no conselho hoje — vem de dataset
+        estruturado da CVM (FRE), reenviado pela empresa a cada mudança,
+        não de busca sobre atas antigas.</p>
+      </div>
+      <div class="card">
+        <h3>Financeiro</h3>
+        <p>Resultado de um trimestre, série histórica — vem da DRE
+        estruturada da CVM (ITR/DFP), não de leitura de tabela em PDF.</p>
+      </div>
+      <div class="card">
+        <h3>Narrativo</h3>
+        <p>Estratégia, histórico, fatos relevantes — aí sim entra
+        busca híbrida (BM25 + denso) sobre o corpus de documentos.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Stack</h2>
+    <div class="stack">
+      <span>CrewAI</span>
+      <span>Qdrant (BM25 + denso)</span>
+      <span>OpenRouter</span>
+      <span>Chainlit</span>
+      <span>dados abertos CVM</span>
+      <span>Oracle Cloud</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Documentação técnica</h2>
+    <p>Em construção — por enquanto, o <a class="inline" href="/docs">código</a>
+    está no <a class="inline" href="https://github.com/crystyanalencar/cbrag">repositório</a>
+    (privado; peça acesso se quiser ver).</p>
+  </section>
+
+  <section>
+    <p style="font-size: 0.85rem; color: var(--muted);">Projeto de portfólio pessoal,
+    sem vínculo, chancela ou afiliação com a Grupo Casas Bahia. Usa
+    exclusivamente dados públicos (CVM, site institucional via Wayback
+    Machine).</p>
+  </section>
+</main>
+
+<footer>
+  <span>cbrag.ialencar.com.br</span>
+  <span>Crystyan Alencar</span>
+</footer>
+</body>
+</html>

@@ -15,13 +15,13 @@ from crewai.tools import tool
 # "Tool not found" (UNKNOWN_TOOL). Nome curto e sem preposição reduz a
 # chance de o modelo reescrever errado.
 
-from casas_bahia_rag.composicao_conselho import contexto_composicao_conselho
-from casas_bahia_rag.dados_financeiros import (
+from cbrag.composicao_conselho import contexto_composicao_conselho
+from cbrag.dados_financeiros import (
     contexto_resultado_financeiro,
     serie_resultado_financeiro,
 )
-from casas_bahia_rag.documentos_recentes import CATEGORIAS, listar_documentos_recentes
-from casas_bahia_rag.knowledge_config import buscar_contexto
+from cbrag.documentos_recentes import CATEGORIAS, listar_documentos_recentes
+from cbrag.knowledge_config import buscar_contexto
 
 
 @tool("consultar_resultado_financeiro")

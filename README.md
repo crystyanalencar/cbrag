@@ -1,4 +1,4 @@
-# casas_bahia_rag
+# cbrag
 
 Chatbot RAG conversacional sobre a Grupo Casas Bahia (institucional, RI,
 governança e financeiro), construído com CrewAI (Flow conversacional +
@@ -33,7 +33,7 @@ uv sync
 ```bash
 uv run ingest   # coleta CVM/site, prepara o corpus e indexa no Qdrant (incremental)
 uv run chat     # REPL do chatbot no terminal
-uv run chainlit run src/casas_bahia_rag/chainlit_app.py   # interface web
+uv run chainlit run src/cbrag/chainlit_app.py   # interface web
 ```
 
 A ingestão (`uv run ingest`) precisa rodar antes do chat funcionar — sem
@@ -51,11 +51,11 @@ uv run python scripts/avaliar_retrieval.py --modo qdrant-hibrido --verboso
 
 ## Layout
 
-- `src/casas_bahia_rag/main.py` — Flow conversacional, agente, fallback de LLM
-- `src/casas_bahia_rag/tools/rag_tools.py` — tools que o agente chama
-- `src/casas_bahia_rag/qdrant_store.py` — índice Qdrant (denso + BM25, busca)
-- `src/casas_bahia_rag/knowledge_config.py` — caminhos, chunking, manifesto
-- `src/casas_bahia_rag/dados_financeiros.py`, `composicao_conselho.py` — dados estruturados da CVM
+- `src/cbrag/main.py` — Flow conversacional, agente, fallback de LLM
+- `src/cbrag/tools/rag_tools.py` — tools que o agente chama
+- `src/cbrag/qdrant_store.py` — índice Qdrant (denso + BM25, busca)
+- `src/cbrag/knowledge_config.py` — caminhos, chunking, manifesto
+- `src/cbrag/dados_financeiros.py`, `composicao_conselho.py` — dados estruturados da CVM
 - `scripts/` — coleta (Wayback, CVM), extração de PDF, preparação do corpus, avaliação
 - `tests/golden_retrieval.json` — perguntas com documento esperado, pra medir retrieval
 - `data/` — corpus e índice (gerados, fora do git)
