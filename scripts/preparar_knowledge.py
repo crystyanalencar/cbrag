@@ -17,6 +17,8 @@ import re
 from datetime import date
 from pathlib import Path
 
+from cbrag.knowledge_config import _FRE_VERSAO_RE, CATEGORIA_VERSIONADA
+
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_HTML_DIR = ROOT / "data/corpus"
 CORPUS_PDF_DIR = ROOT / "data/corpus_pdf"
@@ -24,10 +26,11 @@ CDX_FILES = [ROOT / "data/cdx/cdx_main.json", ROOT / "data/cdx/cdx_ri.json"]
 OUT_DIR = ROOT / "data/knowledge"
 METADATA_FILE = OUT_DIR / "_metadata.json"
 IPE_INDICE_FILE = ROOT / "data/cvm/_ipe_index.json"  # gravado por baixar_cvm.py
+RI_INDICE_FILE = ROOT / "data/ri_central/_ri_index.json"  # gravado por baixar_ri_mziq.py
 
 INTERVALO_CABECALHO = 800  # caracteres; deve ser < chunk_size do TextFileKnowledgeSource
 
-CVM_NOME_RE = re.compile(r"^(\d{4})_(\d{2})_(\d{2})_(.+)$")
+CVM_NOME_RE = re.compile(r"^(\d{4})[_-](\d{2})[_-](\d{2})_(.+)$")
 CVM_CATEGORIA_SUFIXO_RE = re.compile(r"_\d{6,}ipe.*$")
 UPLOADS_DATA_RE = re.compile(r"uploads_(\d{4})_(\d{2})")
 
@@ -97,10 +100,10 @@ def processar_html(mapa_wayback: dict[str, str], metadata: dict) -> int:
     return n
 
 
-def _ler_indice_ipe() -> dict[str, dict]:
-    if not IPE_INDICE_FILE.exists():
+def _ler_indice(caminho: Path) -> dict[str, dict]:
+    if not caminho.exists():
         return {}
-    return json.loads(IPE_INDICE_FILE.read_text(encoding="utf-8"))
+    return json.loads(caminho.read_text(encoding="utf-8"))
 
 
 def campos_cvm(nome_arquivo: str, indice: dict[str, dict]) -> dict:
@@ -108,12 +111,15 @@ def campos_cvm(nome_arquivo: str, indice: dict[str, dict]) -> dict:
     assunto, data de referência) pro documento — vazio se o arquivo não
     está no índice (HTML do site, PDF institucional, ou índice ainda não
     gerado). São esses campos, não o slug do nome do arquivo, que viram
-    filtro/payload na base (ver STATE.md, fase 3.2)."""
+    filtro/payload na base (ver STATE.md, fase 3.2).
+
+    O índice da Central (`baixar_ri_mziq.classificar`) tem o mesmo formato;
+    documento sem categoria CVM equivalente vem sem `categoria`."""
     info = indice.get(nome_arquivo)
     if not info:
         return {}
     campos = {
-        "categoria_cvm": info["categoria"],
+        "categoria_cvm": info.get("categoria"),
         "tipo_cvm": info.get("tipo") or None,
         "especie_cvm": info.get("especie") or None,
         "assunto": info.get("assunto") or None,
@@ -122,7 +128,7 @@ def campos_cvm(nome_arquivo: str, indice: dict[str, dict]) -> dict:
     return {k: v for k, v in campos.items() if v is not None}
 
 
-def metadado_pdf(nome_arquivo: str) -> tuple[str, str, str | None, str]:
+def metadado_pdf(nome_arquivo: str, indice_ri: dict[str, dict]) -> tuple[str, str, str | None, str]:
     """Retorna (origem, categoria, data_iso, data_display) a partir do nome
     do arquivo extraído. data_iso é None quando a data não é exata o
     bastante pra ordenar (ex. aproximada por mês) ou desconhecida.
@@ -130,8 +136,17 @@ def metadado_pdf(nome_arquivo: str) -> tuple[str, str, str | None, str]:
     `categoria` aqui é o slug antigo (Categoria+Assunto grudados, 442
     valores) — ainda gravado no payload por compatibilidade, mas filtro e
     payload "de verdade" usam os campos limpos de `campos_cvm`
-    (`categoria_cvm`, `assunto`...)."""
+    (`categoria_cvm`, `assunto`...).
+
+    RI-central (baixar_ri_mziq.py) checado antes do padrão CVM/IPE porque
+    usa o mesmo formato de nome de arquivo (`YYYY_MM_DD_slug_sufixo`) —
+    só o índice (`_ri_index.json` vs `_ipe_index.json`) distingue a fonte."""
     m = CVM_NOME_RE.match(nome_arquivo)
+    if m and nome_arquivo in indice_ri:
+        ano, mes, dia, _resto = m.groups()
+        data_iso = f"{ano}-{mes}-{dia}"
+        return "RI — Central de Downloads", "ri_central", data_iso, data_iso
+
     if m:
         ano, mes, dia, resto = m.groups()
         categoria_slug = CVM_CATEGORIA_SUFIXO_RE.sub("", resto)
@@ -152,24 +167,57 @@ def metadado_pdf(nome_arquivo: str) -> tuple[str, str, str | None, str]:
     return "Institucional (PDF do site)", "institucional_pdf", None, "data desconhecida"
 
 
+def _versao_fre(texto: str) -> int:
+    m = _FRE_VERSAO_RE.search(texto)
+    return int(m.group(1)) if m else 0
+
+
 def processar_pdfs(metadata: dict) -> int:
     n = 0
-    indice = _ler_indice_ipe()
+    indice_ri = _ler_indice(RI_INDICE_FILE)
+    indice = {**_ler_indice(IPE_INDICE_FILE), **indice_ri}
+    versoes_fre: dict[str, int] = {}
     for caminho in sorted(CORPUS_PDF_DIR.glob("*.txt")):
-        origem, categoria, data_iso, data_display = metadado_pdf(caminho.stem)
+        origem, categoria, data_iso, data_display = metadado_pdf(caminho.stem, indice_ri)
         cabecalho = f"[Fonte: {origem} | Data: {data_display}]"
         corpo = caminho.read_text(encoding="utf-8")
         destino = OUT_DIR / caminho.name
-        destino.write_text(inserir_cabecalhos(corpo, cabecalho), encoding="utf-8")
+        campos = campos_cvm(caminho.stem, indice)
+        if campos.get("categoria_cvm") == CATEGORIA_VERSIONADA:
+            # FRE tem chunker próprio (knowledge_config._chunk_fre) que monta
+            # o cabeçalho de cada chunk; o cabeçalho a cada 800 caracteres
+            # mudaria o texto de todo trecho a cada versão.
+            destino.write_text(f"{cabecalho}\n{corpo}", encoding="utf-8")
+            versoes_fre[caminho.name] = _versao_fre(corpo)
+        else:
+            destino.write_text(inserir_cabecalhos(corpo, cabecalho), encoding="utf-8")
         metadata[caminho.name] = {
             "origem": origem,
             "categoria": categoria,
             "data_iso": data_iso,
             "data_ordinal": _ordinal(data_iso),
-            **campos_cvm(caminho.stem, indice),
+            **campos,
         }
         n += 1
-    return n
+    return n - descartar_versoes_antigas_fre(metadata, versoes_fre)
+
+
+def descartar_versoes_antigas_fre(metadata: dict, versoes: dict[str, int]) -> int:
+    """Só a versão vigente do FRE (a de data mais recente; empate, a de maior
+    `Versão :` no texto, depois o nome) vai pro corpus. As anteriores não
+    valem por si: o índice guarda o estado atual e cada versão nova entra
+    como delta sobre a que já está lá (qdrant_store.indexar_arquivo).
+    Devolve quantas descartou, e apaga o arquivo já gravado de rodadas
+    anteriores."""
+    if len(versoes) < 2:
+        return 0
+    vigente = max(versoes, key=lambda nome: (metadata[nome]["data_iso"] or "", versoes[nome], nome))
+    for nome in versoes:
+        if nome == vigente:
+            continue
+        (OUT_DIR / nome).unlink(missing_ok=True)
+        del metadata[nome]
+    return len(versoes) - 1
 
 
 def main() -> dict:

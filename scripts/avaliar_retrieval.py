@@ -13,7 +13,7 @@ Uso:
     uv run python scripts/avaliar_retrieval.py            # modo padrão
     uv run python scripts/avaliar_retrieval.py --modo qdrant-hibrido
     uv run python scripts/avaliar_retrieval.py --k 8 --verboso
-Precisa do Ollama no ar (embedding da pergunta).
+Precisa de `OPENROUTER_API_KEY` no `.env` (embedding da pergunta via Qwen3 Embedding).
 """
 import argparse
 import json

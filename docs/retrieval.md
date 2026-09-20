@@ -29,8 +29,8 @@ adicionar o ano ajuda só se o ano for conhecido de antemão.
 
 O denso (`nomic-embed-text`) tem o mesmo problema agravado: neste corpus
 regulatório o score fica quase plano (0.80-0.85 nos 1000 melhores), sem
-sinal pra separar documento certo de boilerplate (ver medições no
-`STATE.md`, fases 3 e 3.1). Cross-encoder de reranking foi testado e não
+sinal pra separar documento certo de boilerplate (medições em
+`busca-hibrida.md`). Cross-encoder de reranking foi testado e não
 resolveu (12 min em CPU, e o documento certo continuou fora do top 8).
 
 Roteamento por categoria + blend de recência no vetorial também foi tentado
@@ -73,3 +73,28 @@ código rodar → erro de tool → iteração perdida, e modelos escrevem "fatos
 relevantes"/"comunicado" em vez do valor exato. Mesmo princípio do
 parâmetro dummy `confirmar` em `consultar_composicao_conselho` (provider
 strict rejeitava tool sem parâmetro).
+
+## Anexos tabulares de documento grande (Petição Inicial da RJ)
+
+A Petição Inicial de 18/08/2026 da Central (`2026-08-18_peticao_inicial_0cb0465d.txt`)
+tem 26 MB e ~14,2 mil chunks: o corpo narrativo (~2 mil linhas) e os anexos
+(Doc. 9 relação nominal de credores; Doc. 20 fornecedores classificados
+"Essencial"; contratos, certidões). A CVM também tem a petição (versões de
+18, 20 e 21/08 + anexo 1), mas sem esses anexos; a lista de credores e a de
+fornecedores essenciais só existem na Central.
+
+Pergunta em linguagem natural ("quais os credores essenciais?", "cite as
+empresas de serviços digitais") não traz os anexos: o top-k de 8 vem do corpo
+narrativo (que repete "credores" e "essenciais" com muito mais densidade). O
+chunk de linha de tabela é só `1120339 25012398000107 GOOGLE CLOUD ... Essencial`:
+o título do anexo e o cabeçalho de colunas ficam só no primeiro chunk da
+tabela, então o embedding denso não tem semântica e o BM25 perde pro texto
+corrido. Prova: consulta que **imita a tabela** ("Fornecedor CNPJ Nome do
+fornecedor CLASSIFICAÇÃO Essencial GOOGLE CLOUD", "Devedor Classificação
+Credor Extraconcursal BANCO BRADESCO") devolve quase só chunks do Doc. 20/Doc. 9.
+Ou seja, o dado está indexado; falta contexto no chunk e sobra concorrência
+no top-k (par CVM × Central duplicado ocupa 2 slots por documento).
+
+Como diagnosticar: `eventos.jsonl` do chat grava só ~1 chunk por resultado de
+tool, então não mostra o top-k. Rodar `kc.buscar_resultados(consulta)` dentro
+do container (`/app/.venv/bin/python`) e ler `metadata` de cada resultado.

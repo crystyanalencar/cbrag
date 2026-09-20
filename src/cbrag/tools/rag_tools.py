@@ -28,6 +28,7 @@ from cbrag.knowledge_config import buscar_contexto
 def consultar_resultado_financeiro(
     ano: int | None = None,
     periodo: Literal["trimestre", "ano"] = "trimestre",
+    trimestre: int | None = None,
 ) -> str:
     """Retorna a DRE (demonstração de resultado) consolidada da Grupo Casas
     Bahia, direto do dataset estruturado da CVM (ITR/DFP) — Receita,
@@ -44,8 +45,15 @@ def consultar_resultado_financeiro(
     "resultado de 2023"). Combine com `periodo="ano"` quando a pergunta
     pedir claramente o ano fechado/inteiro (ex.: "resultado de 2023 no ano
     todo"); use "trimestre" (padrão) se mencionar um trimestre específico ou
-    não deixar claro."""
-    resultado = contexto_resultado_financeiro(ano=ano, periodo=periodo)
+    não deixar claro.
+
+    `trimestre` (1, 2 ou 3) escolhe um trimestre específico: "resultado do
+    1º trimestre de 2026" -> `ano=2026, trimestre=1`. Sem ele vem sempre o
+    ÚLTIMO trimestre do período, que NÃO é o 1T quando o 2T já saiu. Se a
+    pergunta citar "1T", "2T", "3T" ou "primeiro/segundo/terceiro
+    trimestre", informe `trimestre`. O 4T isolado não existe no dataset
+    (só o acumulado do ano, use `periodo="ano"`)."""
+    resultado = contexto_resultado_financeiro(ano=ano, periodo=periodo, trimestre=trimestre)
     return resultado or "Nenhum dado estruturado de resultado financeiro disponível pra esse período."
 
 

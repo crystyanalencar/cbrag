@@ -1,5 +1,5 @@
 """Constrói/atualiza o índice Qdrant a partir de data/knowledge/ (denso via
-Ollama + BM25 via fastembed), incremental pelo manifesto
+OpenRouter/Qwen3 Embedding + BM25 via fastembed), incremental pelo manifesto
 (data/knowledge_storage/manifest.json): só arquivo novo ou mudado (hash) é
 reprocessado. Mesma lógica de `IngestFlow.embutir_conhecimento`, sem rodar
 o resto do ingest (crawl, CVM, PDFs) — útil pra reconstruir só o índice.
@@ -8,7 +8,7 @@ Uso:
     uv run python scripts/backfill_qdrant.py
     ANO_MINIMO=2026 uv run python scripts/backfill_qdrant.py   # em fases
     uv run python scripts/backfill_qdrant.py --so-bm25          # só o esparso
-Precisa do Ollama no ar.
+Precisa de `OPENROUTER_API_KEY` no `.env` (embedding denso via Qwen3 Embedding).
 """
 import os
 import sys
@@ -26,7 +26,7 @@ def main() -> dict:
     qs.garantir_colecao()
     if "--so-bm25" in sys.argv:
         # Só recalcula o vetor esparso (normalização do BM25 mudou) — sem
-        # Ollama, sem tocar no denso nem no manifesto.
+        # chamar o embedder denso, sem tocar no denso nem no manifesto.
         inicio = time.time()
         n = qs.reindexar_bm25()
         print(f"BM25 recalculado em {n} pontos, {time.time() - inicio:.0f}s")

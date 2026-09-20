@@ -1,8 +1,8 @@
-# Imagem de produção da interface web (Chainlit). Não empacota dados:
-# `data/knowledge_storage/` (índice Qdrant, gerado por `uv run ingest`) e
-# `.env` (segredo) ficam fora da imagem — montados como volume/env_file no
-# deploy (ver docker-compose.yml). Chat usa só BM25 em runtime, sem
-# Ollama/GPU necessário aqui — geração é via OpenRouter (API).
+# Mesma imagem serve o chat (service `chat`) e a ingestão agendada (service
+# `ingest`, ver docker-compose.yml) — ambos usam OpenRouter (LLM e
+# embedding), sem Ollama/GPU necessário. Não empacota dados: `data/` e
+# `.env` (segredo) ficam fora da imagem, montados como volume/env_file no
+# deploy.
 FROM python:3.12-slim
 
 # uv instalado via imagem oficial (multi-stage copy), sem precisar de curl/pip
@@ -16,6 +16,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY src/ src/
+COPY scripts/ scripts/
 COPY chainlit.md ./
 COPY .chainlit/ .chainlit/
 COPY public/ public/

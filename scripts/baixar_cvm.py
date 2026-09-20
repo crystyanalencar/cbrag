@@ -23,7 +23,12 @@ PDF_DIR = ROOT / "data/cvm"
 INDICE_FILE = PDF_DIR / "_ipe_index.json"
 
 CODIGO_CVM = "6505"  # Grupo Casas Bahia S.A.
-ANOS = range(2021, 2027)
+# Fase 1 de uma migração por fases pra Central de Downloads (mziq, ver
+# baixar_ri_mziq.py e STATE.md/CS-26): CVM aberta segue cobrindo só o
+# histórico anterior a 2026 — cada fase futura desce esse limite mais um
+# ano (2025, 2024...) conforme scripts/migrar_ano_para_central.py migra
+# mais um ano. Não é decisão final de "histórico fica pra sempre na CVM".
+ANOS = range(2021, 2026)
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; cbrag-crawler/1.0)"}
 
 

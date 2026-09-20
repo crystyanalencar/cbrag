@@ -1,6 +1,6 @@
-"""Base de conhecimento no Qdrant: vetor denso (nomic-embed-text via Ollama)
-+ vetor esparso BM25 (fastembed, stemmer português), busca híbrida com
-fusão RRF feita pelo próprio motor.
+"""Base de conhecimento no Qdrant: vetor denso (Qwen3 Embedding 8B via
+OpenRouter) + vetor esparso BM25 (fastembed, stemmer português), busca
+híbrida com fusão RRF feita pelo próprio motor.
 
 Por que existe (ver STATE.md, fase 3.2): o corpus é majoritariamente texto
 regulatório formal (atas/comunicados CVM) e a maioria das perguntas que
@@ -12,7 +12,17 @@ Usa `qdrant_client` direto, não o wrapper `crewai.rag.qdrant`: o wrapper
 embeda só denso e filtra só por igualdade simples — não faz híbrido.
 
 Modo embedded por padrão (arquivos em data/knowledge_storage/qdrant/, sem
-servidor); com QDRANT_URL no .env usa servidor (docker no VPS), mesma API.
+servidor); com QDRANT_URL no .env usa servidor (docker na VM Oracle —
+necessário pra ingestão agendada rodar concorrente com o chat sem disputar
+o lock do arquivo embedded, ver STATE.md).
+
+Denso trocou de Ollama (`nomic-embed-text`, local, exige GPU) pra OpenRouter
+(`qwen/qwen3-embedding-8b`, API) — a VM de produção não tem GPU. Confirmado
+nomic-embed-text não existe no catálogo de embeddings do OpenRouter; Qwen3
+Embedding também existe no Ollama (`qwen3-embedding:8b`) pra rodar de graça
+localmente se um dia fizer sentido. Formato de entrada do Qwen3 é diferente
+do nomic: só a pergunta leva prefixo de instrução, documento indexado fica
+em texto puro (ver `embed_denso`).
 """
 import atexit
 import os
@@ -22,29 +32,47 @@ import unicodedata
 import uuid
 from pathlib import Path
 
-import ollama
+import litellm
 from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient, models
 
 from cbrag import knowledge_config as kc
 
+# litellm imprime um banner "Provider List" quando o modelo não está no mapa
+# de custo/tokenizer dele (caso de embedding via OpenRouter) — cosmético,
+# mas polui o log a cada lote (LOTE_EMBED=32) num backfill de milhares de
+# chunks; a chamada funciona normalmente sem isso.
+litellm.suppress_debug_info = True
+
 QDRANT_PATH = kc.STORAGE_DIR / "qdrant"
 COLLECTION = kc.COLLECTION_NAME
 VETOR_DENSO = "denso"
 VETOR_BM25 = "bm25"
-DIM_DENSO = 768  # nomic-embed-text
-MODELO_DENSO = "nomic-embed-text"
+DIM_DENSO = 4096  # qwen3-embedding-8b, dimensão nativa (sem truncar via Matryoshka)
+MODELO_DENSO = "openrouter/qwen/qwen3-embedding-8b"
+# Instrução exigida pelo Qwen3 Embedding só do lado da pergunta (o modelo
+# foi treinado assim — documento indexado não leva instrução, só o texto).
+_INSTRUCAO_BUSCA = (
+    "Given a search query about Grupo Casas Bahia corporate/financial/"
+    "regulatory documents, retrieve relevant passages"
+)
 LOTE_EMBED = 32
 # Candidatos por lado antes da fusão. RRF precisa de profundidade: um chunk
 # mediano nas duas listas (que é o que queremos) só vence se entrar nas
 # duas — com 8 por lado ele nem aparece.
 PROFUNDIDADE = 40
-# Modo que o chat usa (knowledge_config.buscar_resultados). "bm25" decidido
-# pelo golden (scripts/avaliar_retrieval.py, 14 perguntas): bm25 11/14 MRR
-# 0.574 vs híbrido 11/14 MRR 0.500 vs denso 5/14 — o denso (nomic-embed-text)
-# não soma nada mensurável neste corpus hoje. Trocar pra "hibrido" quando o
-# embedder denso for trocado e o golden mostrar ganho.
-MODO_CHAT = "bm25"
+# Modo que o chat usa (knowledge_config.buscar_resultados). Histórico com
+# nomic-embed-text/Ollama: bm25 11/14 MRR 0.574 vs híbrido (sem peso) 11/14
+# MRR 0.500 vs denso 5/14 — denso não somava nada, ficou em "bm25".
+# Reavaliado em 2026-09-20 depois da troca pro Qwen3 Embedding 8B/OpenRouter
+# (golden recalculado do zero, corpus 100% reembedado, ver STATE.md): denso
+# sozinho subiu pra 8/14 MRR 0.429 (ainda perde de bm25), híbrido sem peso
+# 11/14 MRR 0.599 (empata recall, MRR melhor), híbrido com peso_bm25=0.7
+# **12/14 MRR 0.699** — melhor resultado de todos, testados 0.6/0.7/0.8
+# (0.699/0.693/0.651). Decisão: "hibrido" com PESO_BM25_CHAT abaixo.
+MODO_CHAT = "hibrido"
+# Só usado quando MODO_CHAT="hibrido" (buscar() ignora fora desse modo).
+PESO_BM25_CHAT = 0.7
 # uuid5 determinístico a partir do doc_id (sha256 do chunk): mesmo chunk ->
 # mesmo ponto, upsert idempotente. Qdrant só aceita int ou UUID como id.
 _NAMESPACE = uuid.UUID("6d0c2a5e-4b3f-4f0e-9c6a-2a1b7e8f9d10")
@@ -114,12 +142,24 @@ def garantir_colecao() -> None:
         c.create_payload_index(COLLECTION, campo, tipo)
 
 
-def embed_denso(textos: list[str]) -> list[list[float]]:
-    """Em lote via `ollama.embed` (bem mais rápido que um-a-um)."""
+def embed_denso(textos: list[str], instruct: str | None = None) -> list[list[float]]:
+    """Em lote via `litellm.embedding` (bem mais rápido que um-a-um).
+    `instruct=True` (usado só em `buscar()`) prefixa cada texto com a
+    instrução exigida pelo Qwen3 Embedding do lado da pergunta —
+    `indexar_arquivo` nunca passa isso, documento vai em texto puro.
+
+    Chave: `OPENROUTER_EMBED_API_KEY` se existir (limite de crédito próprio
+    pro embedding, separado da geração); senão `None` e o litellm usa a
+    `OPENROUTER_API_KEY` geral."""
+    api_key = os.getenv("OPENROUTER_EMBED_API_KEY") or None
+    if instruct:
+        textos = [f"Instruct: {instruct}\nQuery: {t}" for t in textos]
     vetores: list[list[float]] = []
     for i in range(0, len(textos), LOTE_EMBED):
-        resposta = ollama.embed(model=MODELO_DENSO, input=textos[i : i + LOTE_EMBED])
-        vetores.extend(resposta["embeddings"])
+        resposta = litellm.embedding(
+            model=MODELO_DENSO, input=textos[i : i + LOTE_EMBED], api_key=api_key
+        )
+        vetores.extend(item["embedding"] for item in resposta.data)
     return vetores
 
 
@@ -159,6 +199,7 @@ def reindexar_bm25(lote: int = 512) -> int:
     """Recalcula só o vetor esparso de todos os pontos (sem Ollama, sem
     mexer no denso) — pra quando a normalização do BM25 muda. Segundos a
     minutos, não horas."""
+    exigir_servidor()
     c = cliente()
     total = 0
     offset = None
@@ -204,20 +245,105 @@ def _filtro_arquivo(nome: str) -> models.Filter:
     return models.Filter(must=[models.FieldCondition(key="arquivo", match=models.MatchValue(value=nome))])
 
 
+def exigir_servidor() -> None:
+    """Escrita no índice só contra o Qdrant **servidor** (`QDRANT_URL`). Sem
+    ela o cliente cai no modo embedded, que aqui é uma sobra de 2026-09-10 do
+    tempo do nomic (768 dimensões) — não é o índice de produção, que mora no
+    servidor da VM (ver CLAUDE.md e docs/infra-producao.md). Indexar nele
+    falha no meio (dimensão) ou, pior, grava num índice que ninguém consulta.
+    `CBRAG_PERMITIR_QDRANT_LOCAL=1` libera de propósito (testes em memória)."""
+    if os.environ.get("QDRANT_URL") or os.environ.get("CBRAG_PERMITIR_QDRANT_LOCAL") == "1":
+        return
+    raise RuntimeError(
+        "QDRANT_URL não definido: indexar cairia no Qdrant embedded local, que não é o "
+        "índice de produção (o embedding e o índice moram no servidor da VM). Rode a "
+        "ingestão na VM, ou defina QDRANT_URL apontando pro servidor."
+    )
+
+
+def _filtro_categoria_cvm(categoria: str) -> models.Filter:
+    return models.Filter(must=[models.FieldCondition(key="categoria_cvm", match=models.MatchValue(value=categoria))])
+
+
 def indexar_arquivo(caminho: Path) -> int:
-    """Remove os pontos antigos do arquivo (chunk que sumiu não some no
-    upsert) e insere os atuais com os dois vetores. Devolve nº de chunks."""
+    """Reindexa um arquivo cujo hash mudou desde a última vez (ver
+    `knowledge_config.arquivos_pendentes`) sem reembedar chunk cujo
+    conteúdo é idêntico a um chunk já indexado (doc_id = sha256 do chunk,
+    ponto id = uuid5 determinístico dele — mesmo conteúdo => mesmo ponto).
+    Só chama `embed_denso`/`bm25().embed` pro delta real: chunk novo que
+    não existia antes. Chunk que sumiu (órfão) é removido; chunk que
+    permanece igual não é tocado. Existe pra não repetir o custo de
+    embedding em arquivo reenviado quase inteiro a cada versão (FRE via
+    Central de Downloads, ver STATE.md/CS-27) — não resolve o efeito
+    avalanche do chunker por offset fixo (edição no início do documento
+    desloca tudo depois dela e muda quase todo doc_id mesmo assim), só
+    evita o desperdício óbvio quando a mudança não desloca offset.
+
+    O FRE (`kc.CATEGORIA_VERSIONADA`) não sofre disso: tem chunker por
+    conteúdo e identidade sem a data (`kc._chunk_fre`), e a comparação é
+    contra a versão anterior do índice, não contra o mesmo arquivo — o
+    índice fica só com a versão vigente e cada versão nova embeda apenas o
+    delta."""
+    exigir_servidor()
     documentos = kc.montar_documentos(caminho)
     if not documentos:
         return 0
     c = cliente()
-    c.delete(COLLECTION, points_selector=_filtro_arquivo(caminho.name))
-    densos = embed_denso([d["content"] for d in documentos])
-    esparsos = list(bm25().embed([_texto_bm25(d) for d in documentos], batch_size=256))
-    pontos = [_ponto(d, v, e) for d, v, e in zip(documentos, densos, esparsos)]
-    for i in range(0, len(pontos), 256):
-        c.upsert(COLLECTION, points=pontos[i : i + 256])
-    return len(pontos)
+    ids_alvo = {str(uuid.uuid5(_NAMESPACE, d["doc_id"])): d for d in documentos}
+
+    # Documento versionado (FRE): o índice guarda só a versão vigente, então
+    # "o que já existe" é a categoria inteira, não o arquivo — a versão nova
+    # é comparada com a anterior, que é outro arquivo.
+    versionado = documentos[0]["metadata"].get("categoria_cvm") == kc.CATEGORIA_VERSIONADA
+    filtro_existentes = (
+        _filtro_categoria_cvm(kc.CATEGORIA_VERSIONADA) if versionado else _filtro_arquivo(caminho.name)
+    )
+
+    pontos_existentes, _ = c.scroll(
+        COLLECTION,
+        scroll_filter=filtro_existentes,
+        limit=10_000,
+        with_payload=["content"] if versionado else False,
+        with_vectors=False,
+    )
+    ids_existentes = {p.id for p in pontos_existentes}
+    ids_orfaos = ids_existentes - ids_alvo.keys()
+    ids_novos = ids_alvo.keys() - ids_existentes
+
+    if ids_orfaos:
+        c.delete(COLLECTION, points_selector=models.PointIdsList(points=list(ids_orfaos)))
+
+    documentos_novos = [ids_alvo[i] for i in ids_novos]
+    if documentos_novos:
+        densos = embed_denso([d["content"] for d in documentos_novos])
+        esparsos = list(bm25().embed([_texto_bm25(d) for d in documentos_novos], batch_size=256))
+        pontos = [_ponto(d, v, e) for d, v, e in zip(documentos_novos, densos, esparsos)]
+        for i in range(0, len(pontos), 256):
+            c.upsert(COLLECTION, points=pontos[i : i + 256])
+
+    if versionado:
+        # Chunk mantido tem o mesmo texto, mas o cabeçalho (versão/data
+        # vigentes) e o arquivo de origem são os da versão nova: atualiza o
+        # payload, sem reembedar nada.
+        conteudo_atual = {p.id: (p.payload or {}).get("content") for p in pontos_existentes}
+        atualizados = 0
+        for id_ponto in ids_existentes & ids_alvo.keys():
+            d = ids_alvo[id_ponto]
+            if conteudo_atual[id_ponto] == d["content"]:
+                continue
+            c.set_payload(
+                COLLECTION,
+                payload={**d["metadata"], "doc_id": d["doc_id"], "content": d["content"]},
+                points=[id_ponto],
+            )
+            atualizados += 1
+        print(
+            f"  {kc.CATEGORIA_VERSIONADA}: {len(documentos_novos)} chunk(s) novo(s) embedado(s), "
+            f"{len(ids_existentes & ids_alvo.keys())} mantido(s) ({atualizados} com cabeçalho atualizado), "
+            f"{len(ids_orfaos)} removido(s)"
+        )
+
+    return len(documentos)
 
 
 def _filtro_categorias(categorias: list[str] | None) -> models.Filter | None:
@@ -253,7 +379,7 @@ def buscar(
     if modo in ("denso", "hibrido"):
         prefetches.append(
             models.Prefetch(
-                query=embed_denso([pergunta])[0], using=VETOR_DENSO,
+                query=embed_denso([pergunta], instruct=_INSTRUCAO_BUSCA)[0], using=VETOR_DENSO,
                 limit=profundidade, filter=filtro,
             )
         )

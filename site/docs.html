@@ -2,17 +2,21 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>cbrag — docs</title>
+<title>cbrag — como foi construído</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A história por trás do cbrag: as decisões, os erros achados e corrigidos, e como o agente chegou ao formato atual.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --navy: #0033c6;
     --navy-dark: #0d355f;
+    --navy-mid: #1a4fb0;
+    --accent: #e71a3b;
     --bg: #fcfcfc;
+    --panel: #ffffff;
     --hairline: #e0e0e0;
     --text: #231f20;
     --muted: #696969;
@@ -20,29 +24,136 @@
     --sans: "Inter", system-ui, sans-serif;
   }
   :root[data-theme="dark"] {
-    --bg: #0f1416; --hairline: #262e31; --text: #eef1f2; --muted: #9aa7ab; --navy: #6f9bff; --navy-dark: #9dbdff;
+    --bg: #0f1416;
+    --panel: #161d20;
+    --hairline: #262e31;
+    --text: #eef1f2;
+    --muted: #9aa7ab;
+    --navy: #6f9bff;
+    --navy-mid: #9dbdff;
   }
+  * { box-sizing: border-box; }
   body {
+    margin: 0;
     font-family: var(--sans);
     background: var(--bg);
     color: var(--text);
+    line-height: 1.65;
+  }
+  header { border-bottom: 1px solid var(--hairline); }
+  .header-inner {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .wordmark {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--navy);
+    letter-spacing: 0.01em;
+    text-decoration: none;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; margin-left: 1.5rem; }
+  nav a:hover { color: var(--navy); }
+  main { max-width: 44rem; margin: 0 auto; padding: 0 1.5rem; }
+  .hero { padding: 4rem 0 3rem; border-bottom: 1px solid var(--hairline); }
+  .kicker {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 1rem;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 2.1rem;
+    line-height: 1.3;
+    margin: 0 0 1.25rem;
+    color: var(--navy-dark);
+  }
+  .lede { font-size: 1.05rem; color: var(--muted); margin: 0; }
+  .steps { counter-reset: step; padding: 3rem 0; }
+  .step {
+    position: relative;
+    padding: 0 0 2.75rem 3.25rem;
+    border-left: 2px solid var(--hairline);
+    margin-left: 0.65rem;
+  }
+  .step:last-child { border-left-color: transparent; padding-bottom: 0; }
+  .step::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: -0.9rem;
+    top: 0;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 2px solid var(--navy);
+    color: var(--navy-dark);
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 0.9rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100vh;
-    margin: 0;
-    text-align: center;
-    position: relative;
   }
-  main { max-width: 28rem; padding: 2rem; }
-  h1 { font-family: var(--serif); font-weight: 600; color: var(--navy-dark); font-size: 1.5rem; }
-  p { color: var(--muted); }
-  a { color: var(--navy); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+  .step h2 {
+    font-family: var(--serif);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--navy-dark);
+    margin: 0 0 0.6rem;
+  }
+  .step p { margin: 0 0 0.75rem; color: var(--text); }
+  .step p:last-child { margin-bottom: 0; }
+  .step .aside { font-size: 0.88rem; color: var(--muted); border-left: 2px solid var(--hairline); padding-left: 0.85rem; }
+  a.inline { color: var(--navy); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: 0.25rem;
+    padding: 0.1rem 0.35rem;
+  }
+  .cta-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0 0 3rem;
+  }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.75rem 1.35rem;
+    border-radius: 0.25rem;
+    font-size: 0.92rem;
+  }
+  .cta.primary { background: var(--navy); color: #fff; }
+  .cta.primary:hover { background: var(--navy-mid); }
+  .cta.secondary { border: 1px solid var(--hairline); color: var(--text); }
+  .cta.secondary:hover { border-color: var(--navy); color: var(--navy); }
+  footer {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+  }
   .theme-toggle {
-    position: absolute;
-    top: 1.25rem;
-    right: 1.25rem;
     background: none;
     border: 1px solid var(--hairline);
     color: var(--muted);
@@ -51,16 +162,23 @@
     height: 2rem;
     font-size: 0.95rem;
     cursor: pointer;
+    margin-left: 1.25rem;
+    line-height: 1;
   }
   .theme-toggle:hover { border-color: var(--navy); color: var(--navy); }
 </style>
 </head>
 <body>
-<button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema claro/escuro" title="Alternar tema">🌙</button>
-<main>
-  <h1>Docs em construção</h1>
-  <p><a href="/">← voltar</a> · <a href="/chat/">ir pro chat →</a></p>
-</main>
+<header>
+  <div class="header-inner">
+    <a class="wordmark" href="/">cbrag</a>
+    <nav>
+      <a href="/chat/">Chat</a>
+      <a href="/docs">Docs</a>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema claro/escuro" title="Alternar tema">🌙</button>
+    </nav>
+  </div>
+</header>
 <script>
   (function () {
     try {
@@ -84,5 +202,85 @@
     });
   })();
 </script>
+
+<main>
+  <div class="hero">
+    <p class="kicker">Como este projeto foi construído</p>
+    <h1>Não é "conectei um LLM num PDF". É uma série de decisões pra parar de inventar resposta.</h1>
+    <p class="lede">Cada etapa abaixo partiu de um problema real observado no uso do agente —
+    não de uma lista de features definida de antemão. Detalhe técnico completo está no
+    <a class="inline" href="https://github.com/crystyanalencar/cbrag">README do repositório</a>.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <h2>Por que Grupo Casas Bahia</h2>
+      <p>Escolhi uma empresa de capital aberto com histórico público rico e, principalmente,
+      um evento societário real e relevante em curso — o processo de recuperação judicial
+      aberto em 2026. É o tipo de assunto onde um agente que "acha" que sabe é pior do que um
+      agente que admite não saber: cenário perfeito pra testar grounding de verdade, não só
+      demonstrar sintaxe de RAG.</p>
+    </div>
+
+    <div class="step">
+      <h2>Uma pergunta, três jeitos de responder</h2>
+      <p>Cedo ficou claro que tratar toda pergunta como "busca semântica sobre PDF" produzia
+      respostas ruins pra dado que muda de fato: "quem é o CEO hoje" e "qual foi o EBITDA do
+      trimestre" não são perguntas de busca, são perguntas de <em>estado atual</em> e de
+      <em>número exato</em>. O agente evoluiu pra decidir entre três mecanismos por pergunta:</p>
+      <p class="aside">Composição de conselho/diretoria e resultado financeiro vêm de dataset
+      estruturado da CVM (FRE e DRE/ITR/DFP) via tool determinística — nunca de busca por
+      similaridade. Só estratégia, histórico e fatos relevantes vão pra busca híbrida sobre o
+      corpus de documentos.</p>
+    </div>
+
+    <div class="step">
+      <h2>Medir em vez de achar que melhorou</h2>
+      <p>Todo ajuste de retrieval passou por um golden set de perguntas com o documento certo
+      já anotado, medindo recall@8 e MRR — não "parece melhor no teste manual". A busca evoluiu
+      de BM25 puro pra híbrida ponderada (peso maior pro léxico, menor pro denso) depois de
+      confirmar por número que a combinação certa supera qualquer um dos dois sozinho nesse
+      corpus específico.</p>
+    </div>
+
+    <div class="step">
+      <h2>Achados que só apareceram testando de verdade</h2>
+      <p>Vários bugs reais só apareceram olhando conversa de produção, não em teste isolado:
+      o agente respondia com a data da <em>última reeleição</em> do CEO como se fosse a posse
+      original; perguntas com "até hoje" ignoravam o ano corrente porque o prompt nunca dizia
+      a data de hoje; "qual o dado mais recente" respondia só com o número financeiro
+      trimestral e ignorava documento regulatório mais novo publicado por outra via. Cada um
+      virou correção específica no texto que a tool retorna ou no prompt do agente — reforço
+      perto do ponto de uso, não regra genérica solta no backstory.</p>
+    </div>
+
+    <div class="step">
+      <h2>Colocando no ar sem abrir a rede</h2>
+      <p>Produção roda numa VM Oracle Cloud 24/7, atrás de Cloudflare (DNS + TLS), com o
+      firewall da VM restrito às faixas de IP da própria Cloudflare — nada chega direto na
+      origem. Acesso administrativo é só via Tailscale, porta SSH pública fechada. Sem login
+      de usuário por decisão consciente (é portfólio aberto, não produto com dado sensível de
+      terceiros); o controle de custo fica no limite de gasto da própria chave de LLM.</p>
+    </div>
+
+    <div class="step">
+      <h2>Ingestão que roda sozinha, sem reprocessar o que já tem</h2>
+      <p>A coleta de dado novo (CVM, site institucional) roda num timer diário, sem depender
+      de notebook ligado. O reindexamento é incremental de verdade — cada arquivo é
+      controlado por hash num manifesto, então rodar de novo sem nada mudado não gera custo
+      de embedding nenhum, só confirma que está tudo em dia.</p>
+    </div>
+  </div>
+
+  <div class="cta-row">
+    <a class="cta primary" href="/chat/">Conversar com o agente →</a>
+    <a class="cta secondary" href="https://github.com/crystyanalencar/cbrag">Ver o código no GitHub</a>
+  </div>
+</main>
+
+<footer>
+  <span>cbrag.ialencar.com.br</span>
+  <span>Crystyan Alencar</span>
+</footer>
 </body>
 </html>

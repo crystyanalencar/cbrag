@@ -10,11 +10,14 @@ busca léxica (ver STATE.md, fase 3.2). Backup do storage antigo em
 `D:/dev/github/_backups/casas_bahia_rag_chroma_2026-09-10/`.
 
 Importante: os vetores densos só fazem sentido pro modelo de embedding que
-os gerou (`nomic-embed-text`, 768 dimensões). Trocar de modelo exige
-recriar a coleção e rodar o backfill do zero (~2h).
+os gerou (Qwen3 Embedding 8B via OpenRouter, 4096 dimensões, desde
+2026-09-20 — antes era nomic-embed-text via Ollama, 768). Trocar de modelo
+exige recriar a coleção e rodar o backfill do zero.
 """
 import hashlib
 import json
+import re
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -121,6 +124,136 @@ def _chunk_texto(texto: str) -> list[str]:
     ]
 
 
+# Formulário de Referência (FRE): mesmo documento de ~350 páginas
+# republicado várias vezes por mês com poucas mudanças. O chunker por offset
+# fixo (acima) desloca todo chunk depois de qualquer edição, e o cabeçalho
+# com a data da versão muda o hash de todos; então o FRE tem chunker e
+# identidade próprios, e o índice guarda só a versão vigente (ver
+# qdrant_store._sincronizar_versao e docs/ingestao.md).
+CATEGORIA_VERSIONADA = "Formulário de Referência"
+FRE_CHUNK_MIN = 700    # caracteres de corpo antes de aceitar uma fronteira por hash
+FRE_CORPO_MAX = 1750   # + título da seção + cabeçalho fica abaixo de CHUNK_SIZE
+FRE_FRONTEIRA_K = 3    # 1 fim de sentença em K encerra o chunk (após o mínimo): ~1,1 mil caracteres
+_FRE_PAGINA_RE = re.compile(r"^PÁGINA: \d+ de \d+\s*$")
+_FRE_RODAPE_RE = re.compile(r"^Formulário de Referência - \d{4} - .+ Versão : \d+\s*$")
+_FRE_RUIDO_RE = re.compile(r"^(Docusign Envelope ID:|JUR_SP - )")
+_FRE_VERSAO_RE = re.compile(r"Versão : (\d+)")
+
+
+def _secoes_fre(texto: str) -> list[tuple[str, list[str]]]:
+    """Texto extraído do FRE -> [(item, linhas)]. Cada página começa com
+    três linhas: o item (ex. "2.1 Condições financeiras e patrimoniais"),
+    "PÁGINA: n de N" e "Formulário de Referência - ... Versão : v"; esse
+    cabeçalho, o índice que o antecede, a numeração de página e o ruído
+    de assinatura eletrônica saem: são justamente o que muda de uma versão
+    pra outra sem o conteúdo mudar."""
+    linhas = texto.splitlines()
+    marcadores: dict[int, str] = {}  # índice da linha "PÁGINA:" -> item
+    descartar: set[int] = set()
+    for i, linha in enumerate(linhas):
+        if not _FRE_PAGINA_RE.match(linha):
+            continue
+        j = i - 1
+        while j >= 0 and not linhas[j].strip():
+            j -= 1
+        if j < 0:
+            continue
+        marcadores[i] = " ".join(linhas[j].split())
+        descartar.update({j, i})
+        if i + 1 < len(linhas) and _FRE_RODAPE_RE.match(linhas[i + 1]):
+            descartar.add(i + 1)
+    if not marcadores:
+        return []
+
+    inicio = min(min(descartar), min(marcadores))
+    secoes: list[tuple[str, list[str]]] = []
+    item = None
+    for idx in range(inicio, len(linhas)):
+        if idx in marcadores:
+            item = marcadores[idx]
+            if not secoes or secoes[-1][0] != item:
+                secoes.append((item, []))
+            continue
+        if idx in descartar or item is None:
+            continue
+        linha = " ".join(linhas[idx].split())
+        if not linha or _FRE_RUIDO_RE.match(linha) or _FRE_RODAPE_RE.match(linha):
+            continue
+        secoes[-1][1].append(linha)
+    return [(titulo, corpo) for titulo, corpo in secoes if corpo]
+
+
+def _chunk_fre(texto: str) -> list[tuple[str, str]]:
+    """FRE -> [(identidade, corpo)], chunking por conteúdo (content-defined)
+    dentro de cada item, em cima do fluxo de **palavras**, não de linhas:
+    o PDF é reflowed entre versões (a quebra de linha muda sem o texto
+    mudar — medido: 39% das linhas diferentes entre duas versões com 2,6% de
+    texto realmente novo), então linha não serve de átomo.
+
+    A fronteira só cai no fim de uma sentença (palavra terminada em `.;:!?`)
+    cujo hash das últimas 4 palavras satisfaz a condição, depois de um
+    mínimo de tamanho. Editar um trecho só muda o chunk que o contém: o
+    seguinte recomeça na mesma sentença de fronteira e sai idêntico. Trecho
+    sem pontuação (tabela) é cortado em FRE_CORPO_MAX. Nunca atravessa item
+    (2.1, 4.1...), que vai na primeira linha do chunk.
+
+    `identidade` = hash das palavras (sem quebra de linha, sem cabeçalho);
+    `corpo` mantém as quebras de linha da versão atual, pra tabela continuar
+    legível pro LLM."""
+    chunks: list[tuple[str, str]] = []
+    for titulo, linhas in _secoes_fre(texto):
+        palavras: list[tuple[str, bool]] = []  # (palavra, começa linha nova)
+        for n, linha in enumerate(linhas):
+            for k, palavra in enumerate(linha.split()):
+                palavras.append((palavra, n > 0 and k == 0))
+
+        buffer: list[tuple[str, bool]] = []
+        tamanho = 0
+
+        def fechar():
+            nonlocal buffer, tamanho
+            if buffer:
+                identidade = hashlib.sha256(
+                    (titulo + "\n" + " ".join(p for p, _ in buffer)).encode("utf-8")
+                ).hexdigest()
+                corpo = titulo + "\n"
+                for i, (palavra, quebra) in enumerate(buffer):
+                    corpo += ("\n" if quebra and i else " " if i else "") + palavra
+                chunks.append((identidade, corpo))
+            buffer, tamanho = [], 0
+
+        for i, (palavra, quebra) in enumerate(palavras):
+            if buffer and tamanho + len(palavra) + 1 > FRE_CORPO_MAX:
+                fechar()
+            buffer.append((palavra, quebra))
+            tamanho += len(palavra) + 1
+            if (
+                tamanho >= FRE_CHUNK_MIN
+                and palavra[-1] in ".;:!?"
+                and zlib.crc32(" ".join(p for p, _ in buffer[-4:]).encode("utf-8")) % FRE_FRONTEIRA_K == 0
+            ):
+                fechar()
+        fechar()
+    return chunks
+
+
+def _montar_documentos_fre(texto: str, metadata_base: dict) -> list[dict]:
+    """`doc_id` é a identidade do chunk (hash das palavras), **sem** o
+    cabeçalho com a data nem as quebras de linha: chunk que não mudou de
+    uma versão pra outra mantém o mesmo id e não é reembedado. O cabeçalho
+    (com versão e data vigentes) só entra no `content`."""
+    versao = _FRE_VERSAO_RE.search(texto)
+    cabecalho = (
+        f"[Fonte: {metadata_base.get('origem', 'RI')} — Formulário de Referência"
+        f"{f' (versão {versao.group(1)})' if versao else ''}"
+        f" | Data: {metadata_base.get('data_iso') or 'data desconhecida'}]"
+    )
+    return [
+        {"content": f"{cabecalho}\n{corpo}", "doc_id": identidade, "metadata": metadata_base}
+        for identidade, corpo in _chunk_fre(texto)
+    ]
+
+
 def montar_documentos(caminho: Path) -> list[dict]:
     """Chunka um arquivo de data/knowledge/ e monta os dicts
     `{content, doc_id, metadata}` — doc_id é sha256 do chunk (identidade
@@ -139,6 +272,8 @@ def montar_documentos(caminho: Path) -> list[dict]:
             metadata_base[chave] = valor
 
     texto = caminho.read_text(encoding="utf-8")
+    if metadata_base.get("categoria_cvm") == CATEGORIA_VERSIONADA:
+        return _montar_documentos_fre(texto, metadata_base)
     documentos = []
     for chunk in _chunk_texto(texto):
         documentos.append(
@@ -164,13 +299,14 @@ def buscar_contexto(pergunta: str) -> list[str]:
 
 def buscar_resultados(pergunta: str) -> list[dict]:
     """Busca que o chat usa: índice Qdrant (qdrant_store.py), modo
-    `MODO_CHAT` (BM25 puro hoje — decidido pelo golden, ver STATE.md fase
-    3.2; híbrido fica a um switch de distância pra quando o embedder
-    denso melhorar). Devolve dicts `{content, metadata, score}` na ordem
-    do ranking, que `scripts/avaliar_retrieval.py` usa pra medir recall
-    contra o golden sem depender do LLM. Sem roteamento por categoria nem
-    blend de recência: eram remendos pra diluição da busca vetorial, e o
-    BM25 sem eles já supera o Chroma com eles no golden."""
+    `MODO_CHAT` — híbrido ponderado (`PESO_BM25_CHAT`) desde 2026-09-20,
+    melhor resultado no golden depois da troca de embedder (ver STATE.md).
+    Devolve dicts `{content, metadata, score}` na ordem do ranking, que
+    `scripts/avaliar_retrieval.py` usa pra medir recall contra o golden
+    sem depender do LLM. Sem roteamento por categoria nem blend de
+    recência: eram remendos pra diluição da busca vetorial, e o BM25 sem
+    eles já supera o Chroma com eles no golden."""
     from cbrag import qdrant_store  # import local: qdrant_store importa este módulo
 
-    return qdrant_store.buscar(pergunta, modo=qdrant_store.MODO_CHAT)
+    peso_bm25 = qdrant_store.PESO_BM25_CHAT if qdrant_store.MODO_CHAT == "hibrido" else None
+    return qdrant_store.buscar(pergunta, modo=qdrant_store.MODO_CHAT, peso_bm25=peso_bm25)

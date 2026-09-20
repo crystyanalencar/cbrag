@@ -1,4 +1,20 @@
 services:
+  qdrant:
+    # Banco vetorial como serviço próprio (não mais embedded): a coleção já
+    # passou dos 20 mil pontos que o próprio Qdrant recomenda como limite do
+    # modo embedded (ver qdrant_store.py), e servidor é o que permite chat
+    # e ingest (service abaixo) conversarem com a mesma base ao mesmo tempo
+    # sem disputar o lock de arquivo do modo embedded.
+    image: qdrant/qdrant:latest
+    volumes:
+      - ./data/qdrant_server:/qdrant/storage
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
   chat:
     build: .
     ports:
@@ -19,19 +35,55 @@ services:
       # `router = APIRouter(prefix=config.run.root_path)`), então o Caddy
       # da VM encaminha o path inteiro pro container, sem cortar o prefixo.
       CHAINLIT_ROOT_PATH: ${CHAINLIT_ROOT_PATH:-}
+      # Nome do service acima, resolvido pela rede interna do compose. Sem
+      # isso, qdrant_store.cliente() cai no modo embedded (arquivo local).
+      QDRANT_URL: http://qdrant:6333
     volumes:
       # Caminhos relativos ao diretório do projeto no host — funciona em
       # qualquer máquina, não amarrado a estrutura de disco específica.
       # `.dockerignore` exclui `data/` da imagem, então tudo que o chat lê
       # em runtime precisa estar montado aqui.
-      - ./data/knowledge_storage:/app/data/knowledge_storage   # índice Qdrant, gerado por `uv run ingest`
+      - ./data/knowledge_storage:/app/data/knowledge_storage   # manifesto/backup do modo embedded antigo; chat não lê mais em modo servidor
       - ./data/cvm_estruturado:/app/data/cvm_estruturado:ro    # DRE + conselho (versionado no git)
       - ./data/knowledge:/app/data/knowledge:ro                # _metadata.json + txt, gerado por `uv run ingest` (gitignored)
       - ./data/fastembed_cache:/app/data/fastembed_cache
       - ./data/logs:/app/data/logs
+    depends_on:
+      - qdrant
     restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: "2"
           memory: 2G
+
+  ingest:
+    # Roda sob demanda (`docker compose --profile ingest run --rm ingest
+    # uv run ingest`) — não sobe com `docker compose up -d` normal. Mesma
+    # imagem do chat, mas com os diretórios de trabalho da coleta
+    # (graváveis, ao contrário do :ro do chat) e sem porta/restart, porque
+    # é job de execução única, não serviço de longa duração.
+    build: .
+    profiles: ["ingest"]
+    env_file:
+      - .env
+    environment:
+      CREWAI_TRACING_ENABLED: "false"
+      CREWAI_DISABLE_TELEMETRY: "true"
+      FASTEMBED_CACHE_PATH: /app/data/fastembed_cache
+      QDRANT_URL: http://qdrant:6333
+    volumes:
+      - ./data/corpus:/app/data/corpus
+      - ./data/pdfs:/app/data/pdfs
+      - ./data/cvm:/app/data/cvm
+      - ./data/ri_central:/app/data/ri_central   # Central de Downloads (PDFs + _ri_index.json)
+      - ./data/corpus_pdf:/app/data/corpus_pdf
+      - ./data/cvm_estruturado:/app/data/cvm_estruturado
+      - ./data/knowledge:/app/data/knowledge
+      - ./data/knowledge_storage:/app/data/knowledge_storage
+      - ./data/cdx:/app/data/cdx
+      - ./data/fastembed_cache:/app/data/fastembed_cache
+      - ./data/logs:/app/data/logs
+      - ./tests:/app/tests:ro   # golden_retrieval.json, pra scripts/avaliar_retrieval.py
+    depends_on:
+      - qdrant

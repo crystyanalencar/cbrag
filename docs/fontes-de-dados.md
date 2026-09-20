@@ -9,12 +9,13 @@ testado:
 - Playwright + Chromium real, headless, com `user_agent`/`locale` de
   browser: 403 também.
 
-O bloqueio não é (só) fingerprint de TLS/JS — é reputação de IP/datacenter.
-Rodando de um ambiente cloud/sandbox, qualquer requisição cai no challenge
-antes de chegar no conteúdo. Proxy residencial ou serviço anti-bot dedicado
-resolveriam, mas são custo recorrente pra pegar conteúdo que, no fim, tem
-fonte pública alternativa (ver abaixo) — por isso não foi o caminho
-escolhido.
+O bloqueio não é IP nem fingerprint de TLS: é **detecção de headless**.
+Playwright em modo *headed* (via Xvfb, em servidor sem tela) recebe 200 com
+HTML completo, inclusive de IP de datacenter (reproduzido local e na VM de
+produção). Proxy residencial ou serviço anti-bot resolveriam de outro jeito,
+mas são custo recorrente pra pegar conteúdo que tem fonte pública alternativa
+(abaixo) — não foi o caminho escolhido. A Central de Downloads do RI, que é
+uma API separada sem Akamai, dispensa isso (ver `ingestao.md`).
 
 ## Contorno: Wayback Machine
 

@@ -24,6 +24,7 @@ CATEGORIAS = [
     "Dados Econômico-Financeiros",
     "Informações de Companhias em Recuperação Judicial ou Extrajudicial",
     "Calendário de Eventos Corporativos",
+    "Formulário de Referência",
 ]
 
 QUANTIDADE_MAX = 15

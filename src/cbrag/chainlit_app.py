@@ -43,8 +43,8 @@ _DESCRICAO = (
     "institucional), não sobre memória do modelo.\n\n"
     "**Dá pra perguntar**: resultado de um trimestre (lucro/prejuízo, "
     "receita, EBITDA), série histórica, membros do Conselho e Diretoria, "
-    "histórico e estratégia da empresa, e o processo de pedido de **recuperação "
-    "judicial** em curso desde ago/2026."
+    "histórico e estratégia da empresa, e fatos relevantes e "
+    "desenvolvimentos institucionais recentes."
 )
 
 

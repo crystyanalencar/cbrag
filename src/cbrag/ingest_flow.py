@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 """Flow de ingestão: coleta os dados públicos da Grupo Casas Bahia (Wayback +
 CVM), prepara o corpus e constrói a base de conhecimento (embedding) usada
-pelo CbragFlow (chat). Roda uma vez (ou quando quiser atualizar os
-dados) — não é conversacional, não reroda a cada pergunta do usuário.
+pelo CbragFlow (chat). Agendado diariamente na VM (systemd timer, service
+`ingest` do docker-compose.yml) — não é conversacional, não reroda a cada
+pergunta do usuário.
 
 Cada etapa é Python puro (sem LLM); a última indexa no Qdrant (embedding
-denso via Ollama + BM25 local), incremental por manifesto.
+denso via OpenRouter/Qwen3 Embedding + BM25 local), incremental por
+manifesto — dia sem novidade na CVM só confirma "nada novo" e sai rápido.
 """
 import sys
 from pathlib import Path
@@ -19,6 +21,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import baixar_cvm  # noqa: E402
 import baixar_dfp_itr  # noqa: E402
+import baixar_ri_mziq  # noqa: E402
 import crawl_wayback  # noqa: E402
 import extrair_texto_pdfs  # noqa: E402
 import preparar_knowledge  # noqa: E402
@@ -32,6 +35,9 @@ class IngestState(BaseModel):
     pdfs_falhas: int = 0
     cvm_salvos: int = 0
     cvm_falhas: int = 0
+    ri_central_salvos: int = 0
+    ri_central_pulados: int = 0
+    ri_central_falhas: int = 0
     dre_linhas: int = 0
     pdf_extraidos: int = 0
     pdf_pulados: int = 0
@@ -63,6 +69,14 @@ class IngestFlow(Flow[IngestState]):
             setattr(self.state, chave, valor)
 
     @listen(coletar_cvm)
+    def coletar_ri_central(self):
+        # Central de Downloads do RI (mziq) — fonte de 2026 em diante (ver
+        # STATE.md/CS-26); CVM aberta (coletar_cvm) segue só com histórico.
+        resultado = baixar_ri_mziq.main()
+        for chave, valor in resultado.items():
+            setattr(self.state, chave, valor)
+
+    @listen(coletar_ri_central)
     def coletar_dre_estruturada(self):
         # DRE estruturada (dados.cvm.gov.br, dataset ITR/DFP) em paralelo
         # aos PDFs de "dados econômico-financeiros" já baixados por
@@ -88,7 +102,7 @@ class IngestFlow(Flow[IngestState]):
     @listen(preparar_corpus)
     def embutir_conhecimento(self):
         # Índice Qdrant (qdrant_store.py): cada chunk entra com vetor denso
-        # (Ollama) e esparso BM25 (fastembed), metadata do sidecar no
+        # (OpenRouter/Qwen3 Embedding) e esparso BM25 (fastembed), metadata do sidecar no
         # payload. Não usa o Knowledge/TextFileKnowledgeSource do CrewAI
         # (não repassa metadata) nem o wrapper crewai.rag.qdrant (só denso).
         import os

@@ -47,9 +47,14 @@ def _eh_ano_fechado(linha: dict) -> bool:
     return 355 <= (fim - inicio).days <= 370
 
 
+def _numero_trimestre(linha: dict) -> int:
+    return (date.fromisoformat(linha["DT_INI_EXERC"]).month - 1) // 3 + 1
+
+
 def contexto_resultado_financeiro(
     ano: int | None = None,
     periodo: Literal["trimestre", "ano"] = "trimestre",
+    trimestre: int | None = None,
 ) -> str | None:
     """Texto pronto com as linhas-chave da DRE, período explícito, sem
     exigir do LLM nenhuma leitura de tabela ambígua.
@@ -58,7 +63,24 @@ def contexto_resultado_financeiro(
     Com `ano`: trimestre isolado mais recente dentro desse ano
     (`periodo="trimestre"`, padrão) ou o ano fechado inteiro
     (`periodo="ano"`, ~365 dias) — CVM publica os dois pro mesmo ano, mesmo
-    CD_CONTA, então é ambíguo sem esse parâmetro (ver STATE.md)."""
+    CD_CONTA, então é ambíguo sem esse parâmetro (ver STATE.md).
+
+    `trimestre` (1 a 3) escolhe um trimestre específico e vale sobre
+    `periodo`; sem `ano`, pega o mais recente que tenha aquele trimestre.
+    O 4T isolado não existe no dataset (só embutido no acumulado do ano,
+    ver `serie_resultado_financeiro`), então 4 devolve o aviso em vez de
+    cair em outro trimestre sem dizer."""
+    if trimestre is not None:
+        if trimestre == 4:
+            return (
+                "O 4º trimestre isolado não existe no dataset da CVM (ITR cobre só "
+                "1T/2T/3T; o 4T só aparece embutido no acumulado do ano, no DFP). "
+                'Use periodo="ano" pro resultado do ano fechado.'
+            )
+        if trimestre not in (1, 2, 3):
+            return f"Trimestre inválido: {trimestre}. Use 1, 2 ou 3."
+        periodo = "trimestre"
+
     linhas = _ler_dre()
     if not linhas:
         return None
@@ -71,6 +93,7 @@ def contexto_resultado_financeiro(
         if linha["ORDEM_EXERC"] == "ÚLTIMO"
         and eh_periodo(linha)
         and (ano is None or date.fromisoformat(linha["DT_FIM_EXERC"]).year == ano)
+        and (trimestre is None or _numero_trimestre(linha) == trimestre)
     ]
     if not candidatas:
         return None
@@ -81,7 +104,11 @@ def contexto_resultado_financeiro(
     por_conta = {l["CD_CONTA"]: l for l in do_trimestre}
     inicio = por_conta[next(iter(por_conta))]["DT_INI_EXERC"]
 
-    rotulo_periodo = "ano fechado" if periodo == "ano" else "trimestre"
+    if periodo == "ano":
+        rotulo_periodo = "ano fechado"
+    else:
+        fim_ano = fim_mais_recente[2:4]
+        rotulo_periodo = f"{_numero_trimestre(por_conta[next(iter(por_conta))])}T{fim_ano} (trimestre isolado)"
     linhas_texto = [
         f"DRE consolidada — {rotulo_periodo} de {inicio} a {fim_mais_recente} "
         "(fonte: CVM, dataset estruturado ITR/DFP):"
