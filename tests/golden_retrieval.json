@@ -4,7 +4,8 @@
     {
       "pergunta": "Quantas lojas deficitárias a Casas Bahia fechou em 2026?",
       "esperado": [
-        "2026_08_18_comunicado_ao_mercado_esclarecimentos"
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos",
+        "2026-08-18_comunicado_ao_mercado_esclarecimentos"
       ],
       "falha_conhecida": true
     },
@@ -12,7 +13,9 @@
       "pergunta": "tem certeza sobre o número de lojas? houve fechamento de lojas recentemente?",
       "esperado": [
         "2026_08_18_comunicado_ao_mercado_esclarecimentos",
-        "2026_08_16_comunicado_ao_mercado_apresenta_o_de_resultado_2t26"
+        "2026_08_16_comunicado_ao_mercado_apresenta_o_de_resultado_2t26",
+        "2026-08-18_comunicado_ao_mercado_esclarecimentos",
+        "2026-08-17_comunicado_ao_mercado_apresentacao_de_resultado_2t26"
       ],
       "falha_conhecida": true
     },
@@ -34,21 +37,25 @@
     {
       "pergunta": "Quantas pessoas foram demitidas junto com o fechamento de lojas?",
       "esperado": [
-        "2026_08_18_comunicado_ao_mercado_esclarecimentos"
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos",
+        "2026-08-18_comunicado_ao_mercado_esclarecimentos"
       ],
       "falha_conhecida": true
     },
     {
       "pergunta": "Quais membros do conselho de administração renunciaram em agosto de 2026?",
       "esperado": [
-        "2026_08_16_reuni_o_da_administra_o_i_consigna_o_do_recebimento_de_cartas_de_ren_ncia"
+        "2026_08_16_reuni_o_da_administra_o_i_consigna_o_do_recebimento_de_cartas_de_ren_ncia",
+        "2026-08-16_ata_de_rca_realizada_em_16_08_2026"
       ]
     },
     {
       "pergunta": "Quando a Casas Bahia pediu recuperação judicial?",
       "esperado": [
         "2026_08_16_fato_relevante_pedido_de_recupera_o_judicial",
-        "recupera_o_judicial_ou_extrajudicial_peti_o_inicial"
+        "recupera_o_judicial_ou_extrajudicial_peti_o_inicial",
+        "2026-08-16_fato_relevante_pedido_de_recuperacao_judicial",
+        "2026-08-18_peticao_inicial"
       ]
     },
     {
@@ -72,7 +79,8 @@
     {
       "pergunta": "A empresa demitiu muita gente recentemente?",
       "esperado": [
-        "2026_08_18_comunicado_ao_mercado_esclarecimentos"
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos",
+        "2026-08-18_comunicado_ao_mercado_esclarecimentos"
       ],
       "parafrase": true
     },
@@ -89,7 +97,10 @@
       "esperado": [
         "2026_08_16_fato_relevante_pedido_de_recupera_o_judicial",
         "recupera_o_judicial_ou_extrajudicial_peti_o_inicial",
-        "2026_08_18_comunicado_ao_mercado_esclarecimentos"
+        "2026_08_18_comunicado_ao_mercado_esclarecimentos",
+        "2026-08-16_fato_relevante_pedido_de_recuperacao_judicial",
+        "2026-08-18_peticao_inicial",
+        "2026-08-18_comunicado_ao_mercado_esclarecimentos"
       ],
       "parafrase": true
     },

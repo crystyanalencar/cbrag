@@ -11,11 +11,14 @@ Flow conversacional do CrewAI (`conversational = True`, `handle_turn`) com
 histórico é do próprio Flow, por `session_id`, e cada sessão de navegador
 tem Flow próprio (usuários simultâneos funcionam). Desvios conscientes da
 doc do CrewAI: instruções no `backstory` (a doc quer na task; sem Task aqui,
-e instrução perto da tool funcionou melhor), 5 tools (limite recomendado),
+e instrução perto da tool funcionou melhor), 7 tools (a doc recomenda até 5: as duas
+novas, `consultar_cobertura_da_base` e `consultar_indicadores_operacionais`, cobrem
+perguntas que nenhuma outra respondia; se a escolha de tool piorar, é o primeiro suspeito),
 import `crewai.flow.conversational`.
 
 Tools: `consultar_resultado_financeiro`, `consultar_serie_historica_resultado`,
 `consultar_composicao_conselho`, `consultar_documentos_recentes`,
+`consultar_cobertura_da_base`, `consultar_indicadores_operacionais`,
 `buscar_conhecimento`. A escolha entre elas é do LLM; **a docstring é o
 roteador**, e diz também quando NÃO usar a concorrente.
 

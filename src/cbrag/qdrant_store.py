@@ -61,6 +61,10 @@ LOTE_EMBED = 32
 # mediano nas duas listas (que é o que queremos) só vence se entrar nas
 # duas — com 8 por lado ele nem aparece.
 PROFUNDIDADE = 40
+# Candidatos buscados por vaga do top-k quando há teto por arquivo (buscar
+# com `max_por_arquivo`): sem sobra, o teto encolhe o resultado em vez de
+# abrir espaço pra outros documentos.
+_SOBRA_DEDUP = 4
 # Modo que o chat usa (knowledge_config.buscar_resultados). Histórico com
 # nomic-embed-text/Ollama: bm25 11/14 MRR 0.574 vs híbrido (sem peso) 11/14
 # MRR 0.500 vs denso 5/14 — denso não somava nada, ficou em "bm25".
@@ -364,6 +368,7 @@ def buscar(
     categorias: list[str] | None = None,
     profundidade: int = PROFUNDIDADE,
     peso_bm25: float | None = None,
+    max_por_arquivo: int | None = None,
 ) -> list[dict]:
     """Devolve `[{content, metadata, score}]` na ordem do ranking.
 
@@ -372,7 +377,15 @@ def buscar(
     com valor (0..1) funde em Python com esse peso pro BM25 e o resto pro
     denso. Os modos isolados existem pra medição
     (`scripts/avaliar_retrieval.py`), o chat usa "hibrido".
+
+    `max_por_arquivo`: no máximo N chunks do mesmo arquivo no resultado.
+    Busca `limite * _SOBRA_DEDUP` candidatos e preenche `limite` respeitando
+    o teto, pra um documento longo (o FRE, a Petição) não ocupar o top-k
+    inteiro e esconder os demais.
     """
+    limite_final = limite
+    if max_por_arquivo is not None:
+        limite = limite_final * _SOBRA_DEDUP
     c = cliente()
     filtro = _filtro_categorias(categorias)
     prefetches = []
@@ -420,10 +433,18 @@ def buscar(
         pontos = _rrf(listas, pesos=[1 - peso_bm25, peso_bm25])[:limite]
 
     resultados = []
+    por_arquivo: dict[str, int] = {}
     for p in pontos:
         payload = dict(p.payload or {})
+        if max_por_arquivo is not None:
+            arquivo = payload.get("arquivo", "")
+            if por_arquivo.get(arquivo, 0) >= max_por_arquivo:
+                continue
+            por_arquivo[arquivo] = por_arquivo.get(arquivo, 0) + 1
         content = payload.pop("content", "")
         resultados.append({"id": p.id, "content": content, "metadata": payload, "score": p.score})
+        if len(resultados) == limite_final:
+            break
     return resultados
 
 

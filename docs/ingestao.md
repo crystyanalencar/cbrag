@@ -178,9 +178,12 @@ base e entra no RAG como PDF.
     o pypdf reconstrói as páginas e o texto sai completo (a última página
     extraída é a "N de N"), então é aceitável. O FRE de 26/08 é caso
     diferente: 24,8MB reais seguidos de zeros, sem como recuperar.
-  - "Planilha de Resultados" é `.xlsx` (pypdf não lê): 11 abas (Lojas,
-    Covenants, Crediário…), mais granular que qualquer dataset público. Não é
-    ingerida até haver uma 2ª versão pra confirmar estrutura estável.
+  - "Planilha de Resultados" é `.xlsx` (pypdf não lê) e a companhia
+    substitui o mesmo arquivo a cada divulgação (`file_name_original`
+    "Planilha de Resultados  atual"): a API só guarda a versão corrente, e o
+    Wayback e a CVM não têm cópias antigas. `baixar_ri_mziq` arquiva cada
+    versão nova em `data/ri_central/_planilhas/<entrega>_<sha256[:8]>.xlsx`
+    (fora do RAG). Estrutura e desenho da ingestão: seção abaixo.
 - **Wayback** (`web.archive.org`): só pra páginas do site institucional sem
   API; baixo valor (as falhas de coleta nunca vieram dele). `crawl_wayback.py`
   tem circuit breaker e a etapa não bloqueia as seguintes.
@@ -195,6 +198,68 @@ documentos CVM daquele ano). Só depois de confirmar que a Central cobre, por
 tem texto PT idêntico. Aceito como duplicata: o diff por chunk já evita
 reembedar, e `documentos_recentes` mostra o mesmo fato duas vezes com datas
 diferentes (ruído pequeno, filtrar não paga a complexidade).
+
+## Planilha de Resultados (.xlsx): estrutura e desenho
+
+**Estrutura (versão de 16/08/2026, 2T26, 2,1 MB, 11 abas).** Formato largo:
+uma linha por métrica, uma coluna por período. Colunas A e B são o rótulo em
+português e em inglês; o cabeçalho de período está na linha 4 (rótulo com
+duas linhas, "2T26" e "2Q26" na mesma célula). Abas de série longa trazem também colunas anuais
+intercaladas (`2018`, `2019`...), logo depois do 4T do ano.
+
+| Aba | Períodos | Conteúdo |
+|---|---|---|
+| BP | 1T11-2T26, só trimestres | Balanço (milhões de R$) |
+| DRE | 1T11-2T26 + 15 anuais | GMV (bruto/líquido, por canal), receita, EBITDA e EBITDA ajustado, e as mesmas linhas em % da receita |
+| Res. Financeiro | 1T18-2T26 + 8 anuais | Detalhe do resultado financeiro (juros de dívida, CDCI, fornecedor convênio, arrendamento, FIDC) |
+| Lojas | 1T09-2T26 | Aberturas, fechamentos e conversões por bandeira, área de vendas e total (mil m²), centros de distribuição |
+| FluxodeCaixa | 1T16-2T26 | Fluxo de caixa (~95 linhas) |
+| Conciliação FC | 1 período | Matriz pontual (2T26) por grupo de movimento, não é série |
+| FC gerencial | 1T22-2T26 | Fluxo de caixa gerencial |
+| Covenants | 4T23-2T26 | Dívida líquida + saldo CDCI / EBITDA ajustado 12 meses; covenant da 10ª emissão |
+| Crediário | 1T21-2T26 | Carteira CDCI: em dia, vencidos por faixa de atraso, % sobre a carteira |
+| Capex | 1T19-2T26 + 7 anuais | Logística, novas lojas, reforma, tecnologia, outros |
+
+O que a torna útil: GMV, EBITDA ajustado, movimentação de lojas, covenants,
+carteira do crediário e capex **não existem** no dataset ITR/DFP da CVM. O que
+se sobrepõe (BP, DRE contábil, fluxo de caixa) a CVM continua sendo a fonte
+oficial; a planilha serve de conferência.
+
+**Armadilhas de leitura.** Linha de grupo (sem valor) dá contexto às linhas
+seguintes: em Lojas, "Abertas/Fechadas/Convertidas" se repetem para Casas Bahia
+e Ponto Frio, e só o cabeçalho de grupo distingue. `-` é vazio, não zero. A
+unidade não está numa coluna: vem do rótulo ("milhões de R$"), do formato da
+célula (`0.0%`) ou da aba (mil m², contagem, múltiplo). Abas terminam em
+rodapés (notas de republicação, "canal descontinuado no 3T19") que não são
+dado. A dimensão declarada de Lojas chega a 1.736 colunas por formatação, só
+~70 têm dado. Números antigos são republicados sem aviso (nota "republicados
+em 12/02/2014").
+
+**Desenho, no mesmo padrão do FRE/DRE da CVM** (script coleta e grava JSON em
+`data/cvm_estruturado/`, módulo em `src/cbrag/` lê, tool do agent consulta,
+nada passa pelo embedding):
+- Extração em formato longo, uma linha por (aba, grupo, métrica, período):
+  `aba, grupo, metrica_pt, metrica_en, periodo ("2T26"), tipo_periodo
+  (trimestre|ano), ano, trimestre, valor, unidade, versao (data de entrega da
+  planilha)`. Formato longo porque cada divulgação acrescenta uma coluna, e a
+  estrutura larga não cabe em JSON consultável.
+- Todas as versões arquivadas entram, com `versao` na linha. A consulta usa a
+  versão mais recente por padrão e sinaliza quando um valor de um período
+  antigo mudou entre versões (republicação), coisa que só a planilha revela.
+- Validação cruzada obrigatória na extração: receita líquida e lucro líquido
+  por trimestre da aba DRE contra `dre.json` da CVM. Divergência acima de
+  arredondamento (a planilha está em milhões, a CVM em milhares) barra a
+  gravação e avisa em vez de publicar número errado.
+- Tool nova (`consultar_indicadores_operacionais`), separada da de resultado
+  financeiro: assunto (lojas, covenants, crediario, capex, gmv, ebitda
+  ajustado), ano e trimestre opcionais, sempre devolvendo período e unidade
+  explícitos. Docstring diz quando NÃO usar (lucro/receita contábil segue em
+  `consultar_resultado_financeiro`).
+- Roda no `ingest` depois de `coletar_ri_central`, só quando aparece hash novo.
+  Dependência nova: `openpyxl` (leitura com `data_only=True`, valores já
+  calculados no arquivo).
+- Fora do desenho: Conciliação FC (matriz de um período só) e o RAG sobre o
+  xlsx.
 
 ## Akamai: a causa é headless, não IP
 

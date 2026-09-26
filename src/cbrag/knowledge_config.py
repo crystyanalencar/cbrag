@@ -34,6 +34,8 @@ COLLECTION_NAME = "casas_bahia_conhecimento"
 CHUNK_SIZE = 2000
 CHUNK_OVERLAP = 200
 RESULTS_LIMIT = 8
+# Teto de chunks do mesmo arquivo no top-k do chat (None = sem teto).
+MAX_POR_ARQUIVO_CHAT: int | None = None
 
 OLLAMA_LLM = "ollama/gemma4:e4b"
 # Geração via OpenRouter (fase 4, ver STATE.md) — substituiu Gemini+Groq
@@ -297,7 +299,7 @@ def buscar_contexto(pergunta: str) -> list[str]:
     return [r["content"] for r in buscar_resultados(pergunta)]
 
 
-def buscar_resultados(pergunta: str) -> list[dict]:
+def buscar_resultados(pergunta: str, max_por_arquivo: int | None = MAX_POR_ARQUIVO_CHAT) -> list[dict]:
     """Busca que o chat usa: índice Qdrant (qdrant_store.py), modo
     `MODO_CHAT` — híbrido ponderado (`PESO_BM25_CHAT`) desde 2026-09-20,
     melhor resultado no golden depois da troca de embedder (ver STATE.md).
@@ -309,4 +311,6 @@ def buscar_resultados(pergunta: str) -> list[dict]:
     from cbrag import qdrant_store  # import local: qdrant_store importa este módulo
 
     peso_bm25 = qdrant_store.PESO_BM25_CHAT if qdrant_store.MODO_CHAT == "hibrido" else None
-    return qdrant_store.buscar(pergunta, modo=qdrant_store.MODO_CHAT, peso_bm25=peso_bm25)
+    return qdrant_store.buscar(
+        pergunta, modo=qdrant_store.MODO_CHAT, peso_bm25=peso_bm25, max_por_arquivo=max_por_arquivo
+    )

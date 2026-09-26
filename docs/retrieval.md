@@ -98,3 +98,25 @@ no top-k (par CVM × Central duplicado ocupa 2 slots por documento).
 Como diagnosticar: `eventos.jsonl` do chat grava só ~1 chunk por resultado de
 tool, então não mostra o top-k. Rodar `kc.buscar_resultados(consulta)` dentro
 do container (`/app/.venv/bin/python`) e ler `metadata` de cada resultado.
+
+## Teto de chunks por arquivo no top-k: medido, sem efeito no golden
+
+`qdrant_store.buscar(max_por_arquivo=N)` limita quantos chunks do mesmo arquivo
+entram no top-k (busca `limite × 4` candidatos e preenche). Com N = 1, 2 e 3 o
+golden de 14 perguntas ficou igual (10/14, MRR 0,625). O miss "a companhia está
+passando por dificuldades financeiras graves?" persistiu mesmo com 8 documentos
+distintos no top-8: é ranking (pergunta sem âncora lexical, o fato relevante
+da RJ não pontua), não um documento longo ocupando as vagas. O teto ficou no
+código com default `None` (sem efeito); ainda não foi medido nos anexos
+tabulares da petição, que é onde a hipótese original fazia mais sentido.
+
+## Golden depois de trocar de fonte
+
+O golden mede pelo nome do arquivo esperado (substring). Trocar a CVM pela
+Central muda o nome (`2026_08_18_...` vira `2026-08-18_...`), então o campo
+`esperado` aceita os dois formatos e a migração deve ser conferida antes de
+apagar a fonte antiga: `scripts/avaliar_retrieval.py --sem-cvm-2026` simula o
+resultado sem a CVM 2026 (busca 40 candidatos e descarta os arquivos dela). Na
+migração de 2026 a simulação previu 10/14 e o real deu 10/14; o que muda é o
+caso "tem certeza sobre o número de lojas?", que só passava pelo arquivo da
+CVM e volta a falhar.

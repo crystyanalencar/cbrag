@@ -17,6 +17,7 @@ Precisa de `OPENROUTER_API_KEY` no `.env` (embedding da pergunta via Qwen3 Embed
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -54,16 +55,40 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--modo", choices=sorted(MODOS), default="chat")
     parser.add_argument("--k", type=int, default=kc.RESULTS_LIMIT)
+    parser.add_argument(
+        "--sem-cvm-2026", action="store_true",
+        help="simula a migração: busca 40 candidatos (modo chat), descarta os arquivos da CVM de 2026 e fica com os k primeiros",
+    )
+    parser.add_argument(
+        "--max-por-arquivo", type=int, default=kc.MAX_POR_ARQUIVO_CHAT,
+        help="teto de chunks do mesmo arquivo no top-k (só no modo chat)",
+    )
     parser.add_argument("--verboso", action="store_true", help="lista os arquivos devolvidos por pergunta")
     args = parser.parse_args()
 
     casos = json.loads(GOLDEN.read_text(encoding="utf-8"))["casos"]
     buscar = MODOS[args.modo]
+    if args.modo == "chat":
+        buscar = lambda pergunta: kc.buscar_resultados(pergunta, max_por_arquivo=args.max_por_arquivo)  # noqa: E731
 
     acertos = 0
     soma_rr = 0.0
     acertos_falha_conhecida = 0
     n_falha_conhecida = 0
+    if args.sem_cvm_2026:
+        # Aproximação de `migrar_ano_para_central.py 2026`: não apaga nada,
+        # só tira do resultado o que a migração apagaria. Arquivo da CVM tem
+        # nome AAAA_MM_DD_...; o da Central, AAAA-MM-DD_...
+        cvm_2026 = re.compile(r"^2026_\d\d_\d\d_")
+
+        def buscar(pergunta):  # noqa: F811
+            candidatos = qs.buscar(
+                pergunta, modo=qs.MODO_CHAT, limite=40,
+                peso_bm25=qs.PESO_BM25_CHAT if qs.MODO_CHAT == "hibrido" else None,
+                max_por_arquivo=args.max_por_arquivo,
+            )
+            return [r for r in candidatos if not cvm_2026.match((r.get("metadata") or {}).get("arquivo", ""))]
+
     print(f"modo={args.modo}  k={args.k}  perguntas={len(casos)}\n")
     for caso in casos:
         resultados = buscar(caso["pergunta"])[: args.k]

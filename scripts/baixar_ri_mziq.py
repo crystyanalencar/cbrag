@@ -19,6 +19,7 @@ Formulário de Referência: a CVM não tem o PDF dele (só o dataset estruturado
 de administração, ver docs/ingestao.md), então não há o que preservar, e as
 versões do exercício anterior são superadas pelo FRE corrente.
 """
+import hashlib
 import json
 import re
 import time
@@ -31,6 +32,12 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 PDF_DIR = ROOT / "data/ri_central"
 INDICE_FILE = PDF_DIR / "_ri_index.json"
+# Cópias da "Planilha de Resultados" (.xlsx), uma por versão. A companhia
+# substitui o mesmo arquivo a cada divulgação ("Planilha de Resultados
+# atual") e a API não guarda as antigas, então sem arquivar aqui a versão
+# anterior se perde. Subpasta de PDF_DIR: já montada no serviço ingest, e
+# `extrair_texto_pdfs` só olha `*.pdf`/`*.csv` no nível de cima.
+PLANILHAS_DIR = PDF_DIR / "_planilhas"
 
 COMPANY_ID = "ce9bff9f-fb19-49b9-9588-c4c6b7052c9c"
 URL_META = f"https://api.mziq.com/mzfilemanager/company/{COMPANY_ID}/filter/categories/year/meta"
@@ -129,6 +136,32 @@ def _sem_acento(texto: str) -> str:
 
 
 _SIGLA_ASSEMBLEIA_RE = re.compile(r"^(agoe|age|ago|agd)\s*-\s*")
+
+
+def eh_planilha_de_resultados(file_title: str) -> bool:
+    return _sem_acento(file_title).startswith("planilha de resultados")
+
+
+def arquivar_planilha(doc: dict) -> str:
+    """Guarda o .xlsx como `<entrega>_<sha256[:8]>.xlsx` em PLANILHAS_DIR,
+    só se esse conteúdo ainda não existe. Devolve "nova", "repetida" ou
+    "falha". Fora do pipeline de embedding: só forma o histórico pra
+    desenhar a ingestão estruturada depois (ver docs/ingestao.md)."""
+    try:
+        resp = requests.get(doc["file_url"], headers=HEADERS, timeout=120)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"FALHA {doc['file_title']} ({doc['file_url']}): {e}")
+        return "falha"
+    hash_curto = hashlib.sha256(resp.content).hexdigest()[:8]
+    PLANILHAS_DIR.mkdir(parents=True, exist_ok=True)
+    if any(PLANILHAS_DIR.glob(f"*_{hash_curto}.xlsx")):
+        return "repetida"
+    entrega = (doc.get("file_published_date") or doc.get("file_date") or "")[:10] or date.today().isoformat()
+    destino = PLANILHAS_DIR / f"{entrega}_{hash_curto}.xlsx"
+    destino.write_bytes(resp.content)
+    print(f"Planilha de Resultados arquivada: {destino.name} ({len(resp.content) // 1024} KB)")
+    return "nova"
 
 
 def deve_pular(file_title: str) -> bool:
@@ -232,6 +265,8 @@ def main() -> dict:
 
     salvos, pulados, falhas = 0, 0, 0
     for doc in todos_docs:
+        if eh_planilha_de_resultados(doc["file_title"]):
+            arquivar_planilha(doc)
         if deve_pular(doc["file_title"]):
             pulados += 1
             continue

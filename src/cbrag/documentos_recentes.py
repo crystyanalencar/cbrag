@@ -125,3 +125,38 @@ def listar_documentos_recentes(
             linhas.append(f"\nTrecho do documento de {info.get('data_iso')} ({_assunto(info)}):\n{trecho}")
 
     return "\n".join(linhas)
+
+
+def resumo_cobertura_da_base(quantidade: int = 10) -> str:
+    """Até quando vai cada fonte da base: documentos (qualquer categoria) e
+    a DRE estruturada. Responde "qual a data mais recente de dados?", que
+    não tem categoria e por isso não cabe em `listar_documentos_recentes`.
+    A data dos documentos é a de entrega/publicação, não a de entrada no
+    índice."""
+    from cbrag.dados_financeiros import _ler_dre  # import local: dados_financeiros não importa este módulo, mas evita ciclo futuro
+
+    docs = [(n, i) for n, i in _ler_metadata_sidecar().items() if i.get("data_iso")]
+    docs.sort(key=lambda par: par[1].get("data_ordinal") or 0, reverse=True)
+    quantidade = max(1, min(quantidade, QUANTIDADE_MAX))
+
+    linhas = ["Cobertura da base de conhecimento, por fonte:"]
+    if docs:
+        linhas.append(
+            f"- Documentos (comunicados, fatos relevantes, atas, releases, petição da recuperação "
+            f"judicial etc.): o mais recente é de {docs[0][1]['data_iso']} (data de entrega/publicação)."
+        )
+    fins = [linha["DT_FIM_EXERC"] for linha in _ler_dre() if linha.get("DT_FIM_EXERC")]
+    if fins:
+        linhas.append(f"- Resultado financeiro estruturado (DRE, dataset ITR/DFP da CVM): período até {max(fins)}.")
+    from cbrag.planilha_resultados import ultimo_periodo
+
+    indicadores = ultimo_periodo()
+    if indicadores:
+        linhas.append(f"- Indicadores operacionais (Planilha de Resultados do RI: lojas, covenants, crediário, capex, GMV): até o {indicadores}.")
+
+    if docs:
+        linhas.append(f"\nOs {min(quantidade, len(docs))} documentos mais recentes, de qualquer categoria:")
+        for _, info in docs[:quantidade]:
+            categoria = info.get("categoria_cvm") or "sem categoria CVM"
+            linhas.append(f"- {info['data_iso']} — {categoria} — {_assunto(info)}")
+    return "\n".join(linhas)

@@ -23,6 +23,7 @@ import baixar_cvm  # noqa: E402
 import baixar_dfp_itr  # noqa: E402
 import baixar_ri_mziq  # noqa: E402
 import crawl_wayback  # noqa: E402
+import extrair_planilha_resultados  # noqa: E402
 import extrair_texto_pdfs  # noqa: E402
 import preparar_knowledge  # noqa: E402
 
@@ -39,6 +40,9 @@ class IngestState(BaseModel):
     ri_central_pulados: int = 0
     ri_central_falhas: int = 0
     dre_linhas: int = 0
+    planilha_versoes: int = 0
+    planilha_valores: int = 0
+    planilha_revisoes: int = 0
     pdf_extraidos: int = 0
     pdf_pulados: int = 0
     pdf_falhas: int = 0
@@ -88,6 +92,20 @@ class IngestFlow(Flow[IngestState]):
             setattr(self.state, chave, valor)
 
     @listen(coletar_dre_estruturada)
+    def extrair_planilha(self):
+        # Planilha de Resultados (.xlsx arquivado por coletar_ri_central) ->
+        # JSON longo em data/cvm_estruturado. Não-bloqueante: a conferência
+        # com a DRE da CVM pode barrar a gravação (SystemExit), e isso não
+        # deve impedir a indexação dos documentos; o JSON anterior fica.
+        try:
+            resultado = extrair_planilha_resultados.main()
+        except (Exception, SystemExit) as e:
+            print(f"extrair_planilha falhou, seguindo sem bloquear: {e}")
+            return
+        for chave, valor in resultado.items():
+            setattr(self.state, chave, valor)
+
+    @listen(extrair_planilha)
     def extrair_pdfs(self):
         resultado = extrair_texto_pdfs.main()
         for chave, valor in resultado.items():

@@ -29,7 +29,9 @@ local_tracing.ativar()
 from cbrag.tools.rag_tools import (
     buscar_conhecimento,
     consultar_composicao_conselho,
+    consultar_cobertura_da_base,
     consultar_documentos_recentes,
+    consultar_indicadores_operacionais,
     consultar_resultado_financeiro,
     consultar_serie_historica_resultado,
 )
@@ -50,6 +52,8 @@ _TOOLS = [
     consultar_serie_historica_resultado,
     consultar_composicao_conselho,
     consultar_documentos_recentes,
+    consultar_cobertura_da_base,
+    consultar_indicadores_operacionais,
     buscar_conhecimento,
 ]
 

@@ -34,3 +34,9 @@ data/fastembed_cache/
 
 # pasta de sessão/upload que o Chainlit cria em runtime — lixo por sessão
 .files/
+
+# gerados na VM a partir de data/ri_central/_planilhas (extrair_planilha_resultados.py);
+# versionar deixaria a árvore da VM suja a cada ingestão
+data/cvm_estruturado/planilha_resultados.json
+data/cvm_estruturado/planilha_revisoes.json
+data/cvm_estruturado/*.tmp

@@ -15,8 +15,9 @@ Nesta máquina não há índice de produção.**
 - `data/` local (corpus, `knowledge/`, `_metadata.json`) serve pra preparar e
   conferir texto/categoria/chunks antes de subir; não está na VM (a VM coleta
   e gera o dela).
-- Plano de 2026: a Central entra **incremental e em paralelo** à CVM 2026 só
-  pra testar; testado, `scripts/migrar_ano_para_central.py 2026` apaga a CVM
-  2026 (redundante; conferir cobertura por `categoria_cvm` antes, ver `docs/decisoes.md`. A Petição Inicial da RJ existe nas duas fontes, mas os anexos dela só na Central).
+- 2026 vem só da Central: a CVM 2026 foi apagada do índice, do manifesto e do
+  disco da VM em 2026-09-26 (`scripts/migrar_ano_para_central.py 2026`, ver
+  `docs/decisoes.md`). A Petição Inicial da RJ existe nas duas fontes, mas os
+  anexos dela só na Central. Anos anteriores continuam na CVM até as próximas fases.
 
 Detalhe: `docs/infra-producao.md` (onde mora o quê) e o estado de retomada, que mora fora deste repo (regra global).

@@ -20,8 +20,10 @@ from cbrag.dados_financeiros import (
     contexto_resultado_financeiro,
     serie_resultado_financeiro,
 )
-from cbrag.documentos_recentes import CATEGORIAS, listar_documentos_recentes
+from cbrag.documentos_recentes import CATEGORIAS, listar_documentos_recentes, resumo_cobertura_da_base
 from cbrag.knowledge_config import buscar_contexto
+from cbrag.planilha_resultados import ASSUNTOS as ASSUNTOS_INDICADORES
+from cbrag.planilha_resultados import contexto_indicadores
 
 
 @tool("consultar_resultado_financeiro")
@@ -152,6 +154,62 @@ def consultar_documentos_recentes(
         + (f" em {ano}" if ano is not None else "")
         + f". Categorias válidas: {validas}."
     )
+
+
+@tool("consultar_indicadores_operacionais")
+def consultar_indicadores_operacionais(
+    assunto: str,
+    ano: int | None = None,
+    trimestre: int | None = None,
+    quantidade_trimestres: int = 4,
+) -> str:
+    """Indicadores da Planilha de Resultados que a companhia publica no RI,
+    por trimestre, com unidade explícita: lojas (abertas, fechadas,
+    convertidas por bandeira, total de lojas, área de vendas e centros de
+    distribuição), covenants (dívida líquida, saldo do crediário, covenant
+    da dívida e seu limite), crediário (carteira, vencidos por faixa de
+    atraso, inadimplência acima de 90 dias), capex (por destino), GMV
+    (bruto e líquido, por canal), EBITDA e EBITDA ajustado, fluxo de caixa
+    gerencial e detalhe do resultado financeiro. Use pra "quantas lojas
+    fechou no 2T26?", "qual o covenant?", "inadimplência do crediário",
+    "capex do ano", "GMV do trimestre", "EBITDA ajustado".
+
+    `assunto` aceita, com ou sem acento: "lojas", "covenants", "crediario",
+    "capex", "gmv", "ebitda", "fluxo de caixa gerencial", "resultado
+    financeiro". Sem `ano`, devolve os últimos `quantidade_trimestres`
+    (padrão 4, máx. 12); com `ano`, os trimestres daquele ano (mais o total
+    anual quando existe); com `ano` e `trimestre`, só aquele.
+
+    NÃO use pra receita, lucro ou resultado contábil (é
+    `consultar_resultado_financeiro`, dataset oficial da CVM, e prevalece se
+    os dois divergirem). Não substitui `buscar_conhecimento` pra o porquê de
+    um número: esta tool só traz o número."""
+    resultado = contexto_indicadores(
+        assunto, ano=ano, trimestre=trimestre, quantidade_trimestres=quantidade_trimestres
+    )
+    if resultado:
+        return resultado
+    validos = "; ".join(ASSUNTOS_INDICADORES)
+    return (
+        f"Nenhum indicador encontrado pra '{assunto}'"
+        + (f" em {ano}" if ano is not None else "")
+        + (f", trimestre {trimestre}" if trimestre is not None else "")
+        + f". Assuntos válidos: {validos}."
+    )
+
+
+@tool("consultar_cobertura_da_base")
+def consultar_cobertura_da_base(quantidade: int = 10) -> str:
+    """Diz até quando vai cada fonte da base (documentos e resultado
+    financeiro) e lista os documentos mais recentes de QUALQUER categoria.
+    Use quando a pergunta for sobre a própria base, sem assunto ou categoria:
+    "qual a data mais recente de dados?", "até quando vão as informações?",
+    "o que foi divulgado/adicionado recentemente?", "qual o documento mais
+    novo?". Se a pergunta citar uma categoria ("último fato relevante"), use
+    `consultar_documentos_recentes`. Responda com a data mais recente entre
+    as fontes, dizendo de qual fonte é cada data (documento vs. DRE), sem
+    escolher só a DRE."""
+    return resumo_cobertura_da_base(quantidade=quantidade)
 
 
 @tool("buscar_conhecimento")
