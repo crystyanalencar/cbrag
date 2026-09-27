@@ -31,18 +31,12 @@ import threading
 import uuid
 from pathlib import Path
 
-import litellm
+import requests
 from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient, models
 
 from cbrag import knowledge_config as kc
 from cbrag.texto import sem_acento
-
-# litellm imprime um banner "Provider List" quando o modelo não está no mapa
-# de custo/tokenizer dele (caso de embedding via OpenRouter) — cosmético,
-# mas polui o log a cada lote (LOTE_EMBED=32) num backfill de milhares de
-# chunks; a chamada funciona normalmente sem isso.
-litellm.suppress_debug_info = True
 
 QDRANT_PATH = kc.STORAGE_DIR / "qdrant"
 COLLECTION = kc.COLLECTION_NAME
@@ -57,6 +51,12 @@ _INSTRUCAO_BUSCA = (
     "regulatory documents, retrieve relevant passages"
 )
 LOTE_EMBED = 32
+# Roteamento de provedor do OpenRouter pro embedding: por padrão só DeepInfra
+# e Nebius (SiliconFlow serve o mesmo modelo a 4x o preço — conferido em
+# openrouter.ai/api/v1/models/qwen/qwen3-embedding-8b/endpoints). Slug "base"
+# (sem sufixo de variante/região) já cobre todas as variantes do provedor.
+# Ajustável via `OPENROUTER_EMBED_PROVIDERS` (CSV) sem precisar mexer no código.
+PROVEDORES_DENSO_PADRAO = ("deepinfra", "nebius")
 # Candidatos por lado antes da fusão. RRF precisa de profundidade: um chunk
 # mediano nas duas listas (que é o que queremos) só vence se entrar nas
 # duas — com 8 por lado ele nem aparece.
@@ -148,23 +148,41 @@ def garantir_colecao() -> None:
 
 
 def embed_denso(textos: list[str], instruct: str | None = None) -> list[list[float]]:
-    """Em lote via `litellm.embedding` (bem mais rápido que um-a-um).
+    """Chamada direta na API do OpenRouter (`requests`, não `litellm`): a
+    config de embedding do OpenRouter no litellm (`OpenrouterEmbeddingConfig`)
+    só repassa `timeout`/`dimensions`/`encoding_format`/`user` pro request —
+    o campo `provider` (restrição de roteamento) é descartado antes de sair,
+    então não dava pra restringir provedor via `litellm.embedding()`.
     `instruct=True` (usado só em `buscar()`) prefixa cada texto com a
     instrução exigida pelo Qwen3 Embedding do lado da pergunta —
     `indexar_arquivo` nunca passa isso, documento vai em texto puro.
 
     Chave: `OPENROUTER_EMBED_API_KEY` se existir (limite de crédito próprio
-    pro embedding, separado da geração); senão `None` e o litellm usa a
-    `OPENROUTER_API_KEY` geral."""
-    api_key = os.getenv("OPENROUTER_EMBED_API_KEY") or None
+    pro embedding, separado da geração); senão `OPENROUTER_API_KEY` geral."""
+    api_key = os.getenv("OPENROUTER_EMBED_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENROUTER_API_KEY (ou OPENROUTER_EMBED_API_KEY) não configurada")
+    provedores = [
+        p.strip()
+        for p in os.getenv("OPENROUTER_EMBED_PROVIDERS", "").split(",")
+        if p.strip()
+    ] or list(PROVEDORES_DENSO_PADRAO)
     if instruct:
         textos = [f"Instruct: {instruct}\nQuery: {t}" for t in textos]
     vetores: list[list[float]] = []
     for i in range(0, len(textos), LOTE_EMBED):
-        resposta = litellm.embedding(
-            model=MODELO_DENSO, input=textos[i : i + LOTE_EMBED], api_key=api_key
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/embeddings",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": MODELO_DENSO.removeprefix("openrouter/"),
+                "input": textos[i : i + LOTE_EMBED],
+                "provider": {"only": provedores, "allow_fallbacks": False},
+            },
+            timeout=120,
         )
-        vetores.extend(item["embedding"] for item in resposta.data)
+        resp.raise_for_status()
+        vetores.extend(item["embedding"] for item in resp.json()["data"])
     return vetores
 
 

@@ -50,10 +50,24 @@ Custo: 1 chamada por `buscar_conhecimento`, poucas dezenas de tokens
 ingestão. Consequência operacional: o chat precisa de chave OpenRouter válida
 mesmo quando a geração usa outro provedor; sem ela a busca densa falha.
 A `OPENROUTER_API_KEY` serve a geração (LLM do chat) e, por padrão, o
-embedding (pergunta no chat + corpus na ingestão), lida pelo `litellm` do
-ambiente. Com `OPENROUTER_EMBED_API_KEY` definida, `embed_denso` usa essa
-chave no embedding: chaves separadas na mesma conta dão limite de crédito
-por chave, então estouro de uma não derruba a outra. Sem ela cai na geral.
+embedding (pergunta no chat + corpus na ingestão). Com `OPENROUTER_EMBED_API_KEY`
+definida, `embed_denso` usa essa chave no embedding: chaves separadas na
+mesma conta dão limite de crédito por chave, então estouro de uma não
+derruba a outra. Sem ela cai na geral.
+
+**`embed_denso` chama a API do OpenRouter direto (`requests`), não via
+`litellm`.** Motivo: restringir o roteamento de provedor (SiliconFlow serve
+o mesmo `qwen/qwen3-embedding-8b` a 4x o preço de DeepInfra/Nebius — checado
+em `openrouter.ai/api/v1/models/qwen/qwen3-embedding-8b/endpoints`) exige
+mandar `provider: {"only": [...], "allow_fallbacks": false}` no corpo da
+requisição. `litellm.embedding()` descarta esse campo pro OpenRouter: a
+config de embedding dele (`OpenrouterEmbeddingConfig.get_supported_openai_params`)
+só repassa `timeout`/`dimensions`/`encoding_format`/`user`, então `provider`
+nunca chegava na API — silencioso com `litellm.drop_params=True`, erro 500
+sem. Lista de provedor permitido é `PROVEDORES_DENSO_PADRAO` (padrão
+`deepinfra`, `nebius`), ajustável sem redeploy via `OPENROUTER_EMBED_PROVIDERS`
+(CSV). Slug sem sufixo de variante/região já cobre todas as variantes do
+provedor (`deepinfra` cobre `deepinfra/us` etc.).
 
 ## Normalização do BM25
 

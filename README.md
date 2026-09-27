@@ -174,6 +174,7 @@ uv sync
 ```
 OPENROUTER_API_KEY=...          # geração (e embedding, se não houver a chave abaixo) — obrigatório
 OPENROUTER_EMBED_API_KEY=...    # opcional — chave só do embedding (limite de crédito próprio)
+OPENROUTER_EMBED_PROVIDERS=...  # opcional — CSV de provedor do OpenRouter pro embedding (padrão: deepinfra,nebius)
 QDRANT_URL=...                  # opcional — usa embedded local sem isso
 QDRANT_API_KEY=...              # opcional
 ```
