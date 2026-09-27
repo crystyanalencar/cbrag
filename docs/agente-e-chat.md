@@ -39,6 +39,12 @@ erro, não o elimina. O que precisa valer sempre vai pro código.
   `date.today()` no f-string do backstory ficava fixo no import — container
   no ar por semanas ficaria com "hoje" velho. Sem a data, "até hoje" era
   ambíguo e a varredura ano a ano parava em 2025.
+- **Fabricação de desculpa institucional.** Pergunta com valor nomeado que a
+  busca não acha (ex. "quanto deve à Samsung") fazia o modelo inventar
+  sigilo/privacidade ("não me cabe divulgar") em vez de dizer que não achou —
+  fabricação disfarçada de política, mais grave que alucinar um número.
+  Backstory proíbe essa saída explicitamente e manda responder só "não
+  encontrei esse valor específico".
 - **Data de reeleição**: `contexto_composicao_conselho()` avisa no próprio
   texto retornado que `eleito em`/`posse em` é a última reeleição (o modelo
   ignorava o aviso só na docstring).
@@ -113,11 +119,39 @@ processo, em modo embedded).
   do Grupo Casas Bahia (risco de marca registrada); disclaimer de
   não-afiliação em `chainlit.md` e no rodapé da landing. `logo_*`,
   `favicon.*` e `avatars/{nome}.*` são resolvidos por glob, extensão livre.
-- Tema do site estático: toggle manual (`localStorage`), sem
-  `prefers-color-scheme` automático.
+- Tema do site estático: dropdown Claro/Escuro/Sistema, mesma chave
+  `localStorage["vite-ui-theme"]` que o Chainlit usa em `/chat` (antes cada
+  um tinha chave própria e o tema não sincronizava entre `/`, `/docs` e
+  `/chat`). "Sistema" segue `prefers-color-scheme` de verdade; só os modos
+  explícitos (Claro/Escuro) fixam `[data-theme]` e ignoram o SO.
 - Cor de marca vem do `theme-color` do `<meta>` do site institucional
   (`#0033C6`; acento `#e71a3b`).
 - `allow_origins` restrito ao domínio de produção.
+
+### Widget de chat da home
+
+Balão flutuante em `site/index.html` (bolhas + input), sem Chainlit UI em
+volta: rota própria `POST {root_path}/api/chat` (`_widget_chat` em
+`chainlit_app.py`), reusa `CbragFlow.handle_turn` puro — mesma API
+conversacional oficial do CrewAI que a página `/chat` usa.
+
+- **SSE, não JSON puro.** Um turno real leva 25-40s (RAG + LLM); sem
+  heartbeat nesse tempo, rede móvel/proxy mata a conexão por inatividade e o
+  navegador nunca vê a resposta pronta. `_widget_chat` manda `: ping` via
+  SSE a cada 10s enquanto `handle_turn` roda em thread, e só o resultado
+  final vem como `data: {...}`.
+- **Sessão por `session_id` do navegador**, não a sessão WebSocket do
+  Chainlit — guardada em memória do processo com TTL de 2h, limpa
+  preguiçosamente a cada chamada (widget não avisa quando a aba fecha).
+  Botão "Novo chat" só gera `session_id` novo e limpa o histórico local.
+- Frontend poda bolhas antigas ao reabrir o painel (painel pesado se
+  acumular sessão longa) e renderiza markdown básico (negrito/lista) na
+  resposta.
+- **Armadilha de tipo**: anotação de retorno com `Union`
+  (`JSONResponse | StreamingResponse`) numa rota custom do FastAPI do
+  Chainlit quebra o startup (`FastAPIError: Invalid args for response
+  field`). `uv run python -c "import cbrag.chainlit_app"` local pega isso
+  sem precisar buildar container.
 
 ## Observabilidade local
 

@@ -78,7 +78,11 @@ não "troca de comando"), e proíbe follow-up cru. O LLM já monta o argumento
 `scripts/avaliar_retrieval.py` + `tests/golden_retrieval.json` (golden de 14
 perguntas, 4 delas paráfrase de propósito, pra não premiar só busca léxica).
 Métricas: recall@8 e MRR. Configuração corrente (híbrido ponderado,
-`peso_bm25=0.7`): recall@8 12/14, MRR 0.699.
+`peso_bm25=0.7`, modo "chat", sem `meses_recentes`): recall@8 10/14 (0.71),
+MRR 0.552, 3/5 falhas conhecidas recuperadas (medido 2026-09-27). Os 4 misses
+restantes são os casos sem âncora lexical descritos em `retrieval.md`
+("mais recente", "tem certeza" etc.) — não regridem com mudança de peso, só
+com dado estruturado ou filtro de data.
 
 ## Modo embedded x servidor
 
