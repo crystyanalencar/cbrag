@@ -10,9 +10,10 @@ outro formato, a tool não muda.
 """
 import json
 import re
-import unicodedata
 from functools import lru_cache
 from pathlib import Path
+
+from cbrag.texto import normalizar as _normalizar
 
 ROOT = Path(__file__).resolve().parents[2]
 PLANILHA_FILE = ROOT / "data" / "cvm_estruturado" / "planilha_resultados.json"
@@ -53,11 +54,6 @@ SINONIMOS = {
 
 TRIMESTRES_PADRAO = 4
 TRIMESTRES_MAX = 12
-
-
-def _normalizar(texto: str) -> str:
-    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return re.sub(r"\s+", " ", sem_acento).casefold().strip()
 
 
 def resolver_assunto(pedido: str) -> str | None:

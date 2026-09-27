@@ -10,9 +10,9 @@ similaridade — mesmo princípio de `dados_financeiros.py` e
 `composicao_conselho.py`.
 """
 import re
-import unicodedata
 
 from cbrag.knowledge_config import KNOWLEDGE_DIR, _ler_metadata_sidecar
+from cbrag.texto import normalizar as _normalizar
 
 # Valores exatos de `categoria_cvm` (CSV IPE da CVM) que valem listar.
 CATEGORIAS = [
@@ -33,11 +33,6 @@ TAMANHO_TRECHO = 1500
 TAMANHO_ASSUNTO = 200
 
 _CABECALHO_RE = re.compile(r"^\[Fonte: .*\]\s*$", re.MULTILINE)
-
-
-def _normalizar(texto: str) -> str:
-    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return re.sub(r"\s+", " ", sem_acento).casefold().strip()
 
 
 def resolver_categoria(pedido: str) -> str | None:

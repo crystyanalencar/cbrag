@@ -28,7 +28,6 @@ import atexit
 import os
 import re
 import threading
-import unicodedata
 import uuid
 from pathlib import Path
 
@@ -37,6 +36,7 @@ from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient, models
 
 from cbrag import knowledge_config as kc
+from cbrag.texto import sem_acento
 
 # litellm imprime um banner "Provider List" quando o modelo não está no mapa
 # de custo/tokenizer dele (caso de embedding via OpenRouter) — cosmético,
@@ -185,7 +185,7 @@ def normalizar_bm25(texto: str) -> str:
       assembleia genérica pro topo. Sai do texto do BM25 (fica no chunk que
       o LLM lê, ele precisa da data)."""
     sem_cabecalho = _CABECALHO_RE.sub(" ", texto)
-    return unicodedata.normalize("NFKD", sem_cabecalho).encode("ascii", "ignore").decode()
+    return sem_acento(sem_cabecalho)
 
 
 def _texto_bm25(documento: dict) -> str:
@@ -328,28 +328,39 @@ def indexar_arquivo(caminho: Path) -> int:
             c.upsert(COLLECTION, points=pontos[i : i + 256])
 
     if versionado:
-        # Chunk mantido tem o mesmo texto, mas o cabeçalho (versão/data
-        # vigentes) e o arquivo de origem são os da versão nova: atualiza o
-        # payload, sem reembedar nada.
-        conteudo_atual = {p.id: (p.payload or {}).get("content") for p in pontos_existentes}
-        atualizados = 0
-        for id_ponto in ids_existentes & ids_alvo.keys():
-            d = ids_alvo[id_ponto]
-            if conteudo_atual[id_ponto] == d["content"]:
-                continue
-            c.set_payload(
-                COLLECTION,
-                payload={**d["metadata"], "doc_id": d["doc_id"], "content": d["content"]},
-                points=[id_ponto],
-            )
-            atualizados += 1
-        print(
-            f"  {kc.CATEGORIA_VERSIONADA}: {len(documentos_novos)} chunk(s) novo(s) embedado(s), "
-            f"{len(ids_existentes & ids_alvo.keys())} mantido(s) ({atualizados} com cabeçalho atualizado), "
-            f"{len(ids_orfaos)} removido(s)"
-        )
+        _atualizar_cabecalhos_fre(c, pontos_existentes, ids_existentes, ids_alvo, documentos_novos, ids_orfaos)
 
     return len(documentos)
+
+
+def _atualizar_cabecalhos_fre(
+    c: QdrantClient,
+    pontos_existentes: list,
+    ids_existentes: set,
+    ids_alvo: dict,
+    documentos_novos: list,
+    ids_orfaos: set,
+) -> None:
+    """FRE (kc.CATEGORIA_VERSIONADA): chunk mantido tem o mesmo texto, mas o
+    cabeçalho (versão/data vigentes) e o arquivo de origem são os da versão
+    nova — atualiza o payload, sem reembedar nada."""
+    conteudo_atual = {p.id: (p.payload or {}).get("content") for p in pontos_existentes}
+    atualizados = 0
+    for id_ponto in ids_existentes & ids_alvo.keys():
+        d = ids_alvo[id_ponto]
+        if conteudo_atual[id_ponto] == d["content"]:
+            continue
+        c.set_payload(
+            COLLECTION,
+            payload={**d["metadata"], "doc_id": d["doc_id"], "content": d["content"]},
+            points=[id_ponto],
+        )
+        atualizados += 1
+    print(
+        f"  {kc.CATEGORIA_VERSIONADA}: {len(documentos_novos)} chunk(s) novo(s) embedado(s), "
+        f"{len(ids_existentes & ids_alvo.keys())} mantido(s) ({atualizados} com cabeçalho atualizado), "
+        f"{len(ids_orfaos)} removido(s)"
+    )
 
 
 def _filtro_categorias(categorias: list[str] | None) -> models.Filter | None:
@@ -390,6 +401,13 @@ def buscar(
         limite = limite_final * _SOBRA_DEDUP
     c = cliente()
     filtro = _filtro_categorias(categorias)
+    prefetches = _montar_prefetches(pergunta, modo, filtro, profundidade)
+    pontos = _executar_query(c, prefetches, filtro, limite, profundidade, peso_bm25)
+    return _aplicar_teto_por_arquivo(pontos, limite_final, max_por_arquivo)
+
+
+def _montar_prefetches(pergunta: str, modo: str, filtro: models.Filter | None, profundidade: int) -> list[models.Prefetch]:
+    """Um `Prefetch` por motor ativo no modo (denso, bm25 ou os dois)."""
     prefetches = []
     if modo in ("denso", "hibrido"):
         prefetches.append(
@@ -408,32 +426,47 @@ def buscar(
         )
     if not prefetches:
         raise ValueError(f"modo desconhecido: {modo}")
+    return prefetches
 
+
+def _executar_query(
+    c: QdrantClient,
+    prefetches: list[models.Prefetch],
+    filtro: models.Filter | None,
+    limite: int,
+    profundidade: int,
+    peso_bm25: float | None,
+) -> list:
+    """Despacha entre as 3 estratégias: motor único, RRF nativo do Qdrant
+    (sem peso) ou RRF ponderado calculado em Python (`_rrf`)."""
     if len(prefetches) == 1:
         resposta = c.query_points(
             COLLECTION, query=prefetches[0].query, using=prefetches[0].using,
             query_filter=filtro, limit=limite, with_payload=True,
         )
-        pontos = resposta.points
-    elif peso_bm25 is None:
+        return resposta.points
+    if peso_bm25 is None:
         resposta = c.query_points(
             COLLECTION, prefetch=prefetches,
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             limit=limite, with_payload=True,
         )
-        pontos = resposta.points
-    else:
-        # RRF do Qdrant não tem peso por lista; com peso, roda as duas
-        # buscas e funde aqui (mesma fórmula, k=60).
-        listas = [
-            c.query_points(
-                COLLECTION, query=pf.query, using=pf.using, query_filter=filtro,
-                limit=profundidade, with_payload=True,
-            ).points
-            for pf in prefetches
-        ]
-        pontos = _rrf(listas, pesos=[1 - peso_bm25, peso_bm25])[:limite]
+        return resposta.points
+    # RRF do Qdrant não tem peso por lista; com peso, roda as duas
+    # buscas e funde aqui (mesma fórmula, k=60).
+    listas = [
+        c.query_points(
+            COLLECTION, query=pf.query, using=pf.using, query_filter=filtro,
+            limit=profundidade, with_payload=True,
+        ).points
+        for pf in prefetches
+    ]
+    return _rrf(listas, pesos=[1 - peso_bm25, peso_bm25])[:limite]
 
+
+def _aplicar_teto_por_arquivo(pontos: list, limite_final: int, max_por_arquivo: int | None) -> list[dict]:
+    """Converte ponto Qdrant em dict de resultado, respeitando o teto de
+    chunks por arquivo (se houver) até completar `limite_final`."""
     resultados = []
     por_arquivo: dict[str, int] = {}
     for p in pontos:

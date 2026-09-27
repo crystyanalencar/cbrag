@@ -23,11 +23,12 @@ import hashlib
 import json
 import re
 import time
-import unicodedata
 from datetime import date
 from pathlib import Path
 
 import requests
+
+from cbrag.texto import sem_acento
 
 ROOT = Path(__file__).resolve().parents[1]
 PDF_DIR = ROOT / "data/ri_central"
@@ -132,7 +133,7 @@ _SEPARADOR_TITULO_RE = re.compile(r"\s+-\s+")
 
 
 def _sem_acento(texto: str) -> str:
-    return unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode().casefold()
+    return sem_acento(texto).casefold()
 
 
 _SIGLA_ASSEMBLEIA_RE = re.compile(r"^(agoe|age|ago|agd)\s*-\s*")
@@ -217,8 +218,7 @@ def classificar(file_title: str) -> dict:
 
 
 def slug(texto: str) -> str:
-    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-zA-Z0-9]+", "_", sem_acento).strip("_").lower()
+    return re.sub(r"[^a-zA-Z0-9]+", "_", sem_acento(texto)).strip("_").lower()
 
 
 def nome_arquivo(doc: dict) -> str:

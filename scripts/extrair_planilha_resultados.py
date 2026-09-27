@@ -25,6 +25,8 @@ from pathlib import Path
 
 import openpyxl
 
+from cbrag.dados_financeiros import _DIAS_ANO_FECHADO, _DIAS_TRIMESTRE
+
 ROOT = Path(__file__).resolve().parents[1]
 PLANILHAS_DIR = ROOT / "data/ri_central/_planilhas"
 OUT_DIR = ROOT / "data/cvm_estruturado"
@@ -202,9 +204,9 @@ def conferir_com_cvm(registros: list[dict]) -> tuple[list[str], list[str]]:
         ini = date.fromisoformat(linha["DT_INI_EXERC"])
         fim = date.fromisoformat(linha["DT_FIM_EXERC"])
         dias = (fim - ini).days
-        if 80 <= dias <= 100:
+        if _DIAS_TRIMESTRE[0] <= dias <= _DIAS_TRIMESTRE[1]:
             periodo = f"{(fim.month - 1) // 3 + 1}T{fim.year % 100:02d}"
-        elif 355 <= dias <= 370:
+        elif _DIAS_ANO_FECHADO[0] <= dias <= _DIAS_ANO_FECHADO[1]:
             periodo = str(fim.year)
         else:
             continue

@@ -30,13 +30,22 @@ def _ler_dre() -> list[dict]:
     return json.loads(DRE_FILE.read_text(encoding="utf-8"))
 
 
+# Faixa de dias entre início e fim do período que distingue trimestre
+# isolado de acumulado (semestre/9 meses/ano) e ano fechado de acumulado
+# parcial, no mesmo dataset ITR/DFP. `scripts/extrair_planilha_resultados.py`
+# importa essas duas constantes em vez de reimplementar a faixa — mudar
+# aqui já vale lá também.
+_DIAS_TRIMESTRE = (80, 100)
+_DIAS_ANO_FECHADO = (355, 370)
+
+
 def _eh_trimestre_isolado(linha: dict) -> bool:
     """~90 dias entre início e fim do período — distingue trimestre isolado
     de acumulado (semestre/9 meses/ano), que também aparecem no mesmo
     dataset com o mesmo DT_FIM_EXERC."""
     inicio = date.fromisoformat(linha["DT_INI_EXERC"])
     fim = date.fromisoformat(linha["DT_FIM_EXERC"])
-    return 80 <= (fim - inicio).days <= 100
+    return _DIAS_TRIMESTRE[0] <= (fim - inicio).days <= _DIAS_TRIMESTRE[1]
 
 
 def _eh_ano_fechado(linha: dict) -> bool:
@@ -44,7 +53,7 @@ def _eh_ano_fechado(linha: dict) -> bool:
     não trimestre isolado nem acumulado parcial (semestre/9 meses)."""
     inicio = date.fromisoformat(linha["DT_INI_EXERC"])
     fim = date.fromisoformat(linha["DT_FIM_EXERC"])
-    return 355 <= (fim - inicio).days <= 370
+    return _DIAS_ANO_FECHADO[0] <= (fim - inicio).days <= _DIAS_ANO_FECHADO[1]
 
 
 def _numero_trimestre(linha: dict) -> int:
