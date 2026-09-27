@@ -35,7 +35,7 @@ def contexto_composicao_conselho() -> str | None:
     data_referencia = linhas[0]["Data_Referencia"]
     versao = linhas[0]["Versao"]
     blocos = [
-        f"Composição de administradores da Grupo Casas Bahia — Formulário "
+        f"Composição de administradores do Grupo Casas Bahia — Formulário "
         f"de Referência CVM, versão {versao}, data de referência "
         f"{data_referencia} (fonte: CVM, dataset estruturado FRE):"
     ]

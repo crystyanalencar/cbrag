@@ -110,7 +110,7 @@ processo, em modo embedded).
   (troca de rede, recarga no celular): `encerrar()` e `responder()` criam o
   Flow se faltar.
 - **Marca**: logo/avatar/favicon são ícone SVG original, não o logo oficial
-  da Grupo Casas Bahia (risco de marca registrada); disclaimer de
+  do Grupo Casas Bahia (risco de marca registrada); disclaimer de
   não-afiliação em `chainlit.md` e no rodapé da landing. `logo_*`,
   `favicon.*` e `avatars/{nome}.*` são resolvidos por glob, extensão livre.
 - Tema do site estático: toggle manual (`localStorage`), sem

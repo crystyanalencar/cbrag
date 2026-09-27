@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """Baixa documentos da Central de Downloads do RI (api.mziq.com, plataforma
-Mziq) da Grupo Casas Bahia S.A. — fonte oficial, sem Akamai (diferente do
+Mziq) do Grupo Casas Bahia S.A. — fonte oficial, sem Akamai (diferente do
 site institucional/RI em si, que usa WAF/CDN anti-bot), publicada no dia do
 fato societário.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Flow de ingestão: coleta os dados públicos da Grupo Casas Bahia (Wayback +
+"""Flow de ingestão: coleta os dados públicos do Grupo Casas Bahia (Wayback +
 CVM), prepara o corpus e constrói a base de conhecimento (embedding) usada
 pelo CbragFlow (chat). Agendado diariamente na VM (systemd timer, service
 `ingest` do docker-compose.yml) — não é conversacional, não reroda a cada

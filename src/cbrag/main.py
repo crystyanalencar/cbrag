@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Chatbot RAG conversacional sobre a Grupo Casas Bahia (institucional +
+"""Chatbot RAG conversacional sobre o Grupo Casas Bahia (institucional +
 RI + financeiro/CVM). Base já embedada pelo IngestFlow (ver
 knowledge_config.py); geração via OpenRouter (preset com fallback entre
 modelos gratuitos configurado no próprio painel do OpenRouter).

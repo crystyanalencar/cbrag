@@ -18,8 +18,8 @@ Assistente sobre a **Grupo Casas Bahia** — institucional, governança e financ
 
 ## Limites
 
-Corpus cobre só a Grupo Casas Bahia, dados públicos até a data mais recente arquivada na CVM/Wayback. Não é aconselhamento financeiro.
+Corpus cobre só o Grupo Casas Bahia, dados públicos até a data mais recente arquivada na CVM/Wayback. Não é aconselhamento financeiro.
 
 ## Aviso
 
-Projeto de portfólio pessoal, **sem vínculo, chancela ou afiliação com a Grupo Casas Bahia**. Usa exclusivamente dados públicos (CVM, site institucional via Wayback Machine).
+Projeto de portfólio pessoal, **sem vínculo, chancela ou afiliação com o Grupo Casas Bahia**. Usa exclusivamente dados públicos (CVM, site institucional via Wayback Machine).

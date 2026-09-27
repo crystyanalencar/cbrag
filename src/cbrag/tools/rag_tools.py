@@ -65,7 +65,7 @@ def consultar_serie_historica_resultado(
     ano_fim: int | None = None,
 ) -> str:
     """Retorna a série completa de trimestres isolados (Resultado Líquido —
-    lucro/prejuízo) da Grupo Casas Bahia, um valor por trimestre, ordenada
+    lucro/prejuízo) do Grupo Casas Bahia, um valor por trimestre, ordenada
     no tempo — direto do dataset estruturado da CVM. Use pra qualquer
     pergunta de tendência ou comparação ao longo de um período, NÃO de um
     trimestre/ano isolado: "algum trimestre teve lucro entre X e Y", "como
@@ -86,7 +86,7 @@ def consultar_serie_historica_resultado(
 @tool("consultar_composicao_conselho")
 def consultar_composicao_conselho(confirmar: bool = True) -> str:
     """Retorna a composição atual de Conselho de Administração, Diretoria e
-    Conselho Fiscal da Grupo Casas Bahia, direto do Formulário de Referência
+    Conselho Fiscal do Grupo Casas Bahia, direto do Formulário de Referência
     (FRE) estruturado da CVM — sempre a versão mais recente arquivada, já
     refletindo renúncia/eleição recente. Use pra qualquer pergunta sobre
     quem são os membros do conselho, diretores, CEO/presidente ou conselho

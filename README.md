@@ -4,7 +4,7 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-em%20produção-brightgreen)
 
-Chatbot RAG conversacional sobre a Grupo Casas Bahia (institucional, RI,
+Chatbot RAG conversacional sobre o Grupo Casas Bahia (institucional, RI,
 governança e financeiro), construído com [CrewAI](https://crewai.com) sobre
 documentos públicos da CVM e do site institucional da empresa — não sobre
 memória do modelo. Em produção: **[cbrag.ialencar.com.br](https://cbrag.ialencar.com.br)**.
@@ -242,7 +242,7 @@ de sistema é resposta errada por recuperação errada, não exceção de códig
   Bahia — ícone da interface é original, criado pra este projeto.
 
 Este é um projeto de portfólio pessoal, sem vínculo, chancela ou afiliação
-com a Grupo Casas Bahia. Usa exclusivamente dados públicos (CVM, site
+com o Grupo Casas Bahia. Usa exclusivamente dados públicos (CVM, site
 institucional via Wayback Machine).
 
 ## Licença

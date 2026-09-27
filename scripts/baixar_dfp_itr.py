@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Baixa a Demonstração de Resultado (DRE) estruturada da Grupo Casas Bahia
+"""Baixa a Demonstração de Resultado (DRE) estruturada do Grupo Casas Bahia
 direto dos datasets ITR/DFP da CVM (dados.cvm.gov.br) — CSV com uma linha
 por conta contábil, com DT_INI_EXERC/DT_FIM_EXERC exatos por linha (dá pra
 distinguir trimestre isolado de acumulado sem ambiguidade nenhuma).
@@ -69,7 +69,7 @@ def main() -> dict:
     for tipo in TIPOS:
         for ano in ANOS:
             linhas = baixar_dre(tipo, ano)
-            print(f"{tipo} {ano}: {len(linhas)} linhas da Grupo Casas Bahia")
+            print(f"{tipo} {ano}: {len(linhas)} linhas do Grupo Casas Bahia")
             todas_linhas.extend(linhas)
 
     OUT_FILE.write_text(

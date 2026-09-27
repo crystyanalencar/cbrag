@@ -47,6 +47,6 @@ nenhuma espécie.
 - Cada linha do CSV tem `Codigo_CVM` (código da empresa) e `Link_Download`
   (URL direta em `rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx...`) — esse
   link devolve o PDF direto, sem exigir sessão/login.
-- Código CVM da Grupo Casas Bahia: **6505**. CNPJ: 33.041.260/0652-90.
+- Código CVM do Grupo Casas Bahia: **6505**. CNPJ: 33.041.260/0652-90.
   Aparece no CSV como `GRUPO CASAS BAHIA S.A.` (nome atual; documentos mais
   antigos podem estar sob o nome anterior, Via Varejo).

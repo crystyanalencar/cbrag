@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Baixa documentos periódicos e eventuais (IPE) da Grupo Casas Bahia S.A.
+"""Baixa documentos periódicos e eventuais (IPE) do Grupo Casas Bahia S.A.
 direto da CVM — fatos relevantes, apresentações a analistas, avisos aos
 acionistas etc. Fonte oficial, sem bloqueio anti-bot (diferente do site
 institucional/RI, que usam Akamai).
@@ -82,7 +82,7 @@ def main() -> dict:
     todas_linhas = []
     for ano in ANOS:
         linhas = baixar_csv_do_ano(ano)
-        print(f"{ano}: {len(linhas)} documentos da Grupo Casas Bahia")
+        print(f"{ano}: {len(linhas)} documentos do Grupo Casas Bahia")
         todas_linhas.extend(linhas)
     salvar_indice(todas_linhas)
 
