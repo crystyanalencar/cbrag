@@ -145,8 +145,10 @@ conversacional oficial do CrewAI que a página `/chat` usa.
   preguiçosamente a cada chamada (widget não avisa quando a aba fecha).
   Botão "Novo chat" só gera `session_id` novo e limpa o histórico local.
 - Frontend poda bolhas antigas ao reabrir o painel (painel pesado se
-  acumular sessão longa) e renderiza markdown básico (negrito/lista) na
-  resposta.
+  acumular sessão longa) e renderiza markdown básico (negrito `**`, itálico
+  `*` e lista) na resposta — `*itálico*` sozinho vazava como asterisco
+  literal até o LLM começar a usar pra grifar termo em inglês/jargão
+  (`*releases*`, `*roadshows*`), quando ficou comum o bastante pra doer.
 - **Armadilha de tipo**: anotação de retorno com `Union`
   (`JSONResponse | StreamingResponse`) numa rota custom do FastAPI do
   Chainlit quebra o startup (`FastAPIError: Invalid args for response

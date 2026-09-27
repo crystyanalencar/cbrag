@@ -507,6 +507,11 @@
       function renderMarkdownLite(text) {
         var html = escapeHtml(text);
         html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        // Itálico de um asterisco só (`*termo*`): o LLM usa isso pra grifar
+        // termo em inglês/jargão (ex. "*roadshows*") e sem isso o asterisco
+        // sobrava literal na bolha — só depois do bold, senão captura o par
+        // teria que evitar `**`, que já virou `<strong>` acima.
+        html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
         html = html.replace(/(?:^|\n)[-*]\s+(.+)/g, function (m, item) {
           return (m.charAt(0) === "\n" ? "\n" : "") + "• " + item;
         });
