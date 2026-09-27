@@ -4,11 +4,11 @@ Mziq) da Grupo Casas Bahia S.A. — fonte oficial, sem Akamai (diferente do
 site institucional/RI em si, que usa WAF/CDN anti-bot), publicada no dia do
 fato societário.
 
-Fonte única pra documento corrente a partir de ANO_INICIAL (ver STATE.md,
-CS-26): CVM aberta (baixar_cvm.py) segue cobrindo só o histórico anterior a
-esse ano, capado em fases — cada fase futura desce ANO_INICIAL mais um ano
-e repete a migração (scripts/migrar_ano_para_central.py) pro ano recém
-coberto.
+Fonte única pra documento corrente a partir de ANO_INICIAL (ver
+docs/ingestao.md, CS-26): CVM aberta (baixar_cvm.py) segue cobrindo só o
+histórico anterior a esse ano, capado em fases — cada fase futura desce
+ANO_INICIAL mais um ano e repete a migração
+(scripts/migrar_ano_para_central.py) pro ano recém coberto.
 
 O ano da Central é o do exercício/referência do documento, não o da
 publicação: DFP, release e apresentação do 4T25 entregues em mar/2026 estão
@@ -44,12 +44,12 @@ URL_META = f"https://api.mziq.com/mzfilemanager/company/{COMPANY_ID}/filter/cate
 CATEGORIA_MZIQ = "central_de_downloads_central_de_downloads"
 IDIOMA = "pt_BR"
 
-ANO_INICIAL = 2026  # fase 1 (ver STATE.md) — desce em fases futuras junto com baixar_cvm.ANOS
+ANO_INICIAL = 2026  # fase 1 — desce em fases futuras junto com baixar_cvm.ANOS
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; cbrag-crawler/1.0)"}
 
 # Títulos (prefixo, sem acento/case) de baixo valor semântico — mesmo
 # espírito de CATEGORIAS_EXCLUIDAS em extrair_texto_pdfs.py, decidido
-# revisando os 82 títulos distintos de 2026 (ver STATE.md).
+# revisando os 82 títulos distintos de 2026.
 TITULOS_EXCLUIDOS = (
     # processual de assembleia — a Ata da mesma assembleia já cobre o fato
     "manual para participacao",
@@ -67,8 +67,8 @@ TITULOS_EXCLUIDOS = (
     "aviso aos mercado",
     "relatorio agente fiduciario",
     # .xlsx, não .pdf — extrair_texto_pdfs.py (pypdf) não lê. Fora desta
-    # fase por decisão explícita (ver STATE.md/plano): só 1 versão até
-    # agora, sem histórico pra confirmar estrutura de abas estável.
+    # fase por decisão explícita: só 1 versão até agora, sem histórico
+    # pra confirmar estrutura de abas estável.
     "planilha de resultados",
 )
 

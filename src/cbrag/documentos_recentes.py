@@ -4,7 +4,7 @@
 
 Por quê: `buscar_conhecimento` é BM25 por termo — "último"/"mais recente"
 não tem âncora lexical nenhuma, então "qual foi o último fato relevante?"
-devolvia um documento diferente a cada tentativa (ver STATE.md, fase 4).
+devolvia um documento diferente a cada tentativa (ver docs/retrieval.md).
 Pergunta de ordem no tempo se resolve ordenando por data, não por
 similaridade — mesmo princípio de `dados_financeiros.py` e
 `composicao_conselho.py`.

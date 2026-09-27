@@ -63,7 +63,7 @@ def contexto_resultado_financeiro(
     Com `ano`: trimestre isolado mais recente dentro desse ano
     (`periodo="trimestre"`, padrão) ou o ano fechado inteiro
     (`periodo="ano"`, ~365 dias) — CVM publica os dois pro mesmo ano, mesmo
-    CD_CONTA, então é ambíguo sem esse parâmetro (ver STATE.md).
+    CD_CONTA, então é ambíguo sem esse parâmetro.
 
     `trimestre` (1 a 3) escolhe um trimestre específico e vale sobre
     `periodo`; sem `ano`, pega o mais recente que tenha aquele trimestre.
@@ -190,7 +190,7 @@ def serie_resultado_financeiro(
 
     # O intervalo pedido (ano_fim) pode deixar de fora dado mais recente que
     # o próprio LLM decidiu cortar por conta própria mesmo instruído a não
-    # limitar (ver STATE.md — reforço só no prompt não bastou). Garantia no
+    # limitar (reforço só no prompt não bastou). Garantia no
     # código: tudo que é mais recente que o fim do intervalo pedido some
     # aqui embaixo, não só o último trimestre — senão criaria buraco (ex.
     # pedir até 2024 quando já tem 2025 e 2026 esconderia o ano inteiro de

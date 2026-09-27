@@ -17,7 +17,7 @@ Nesta máquina não há índice de produção.**
   e gera o dela).
 - 2026 vem só da Central: a CVM 2026 foi apagada do índice, do manifesto e do
   disco da VM em 2026-09-26 (`scripts/migrar_ano_para_central.py 2026`, ver
-  `docs/decisoes.md`). A Petição Inicial da RJ existe nas duas fontes, mas os
+  `docs/ingestao.md`). A Petição Inicial da RJ existe nas duas fontes, mas os
   anexos dela só na Central. Anos anteriores continuam na CVM até as próximas fases.
 
 Detalhe: `docs/infra-producao.md` (onde mora o quê) e o estado de retomada, que mora fora deste repo (regra global).

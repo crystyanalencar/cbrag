@@ -1,7 +1,6 @@
 # Retrieval: quando busca não é a ferramenta
 
-Referência durável do que se aprendeu montando o chat. Sem status — o que
-está aplicado ou pendente fica no `STATE.md`.
+Referência durável do que se aprendeu montando o chat.
 
 ## Três tipos de pergunta, três mecanismos
 
@@ -27,16 +26,10 @@ documento com o termo genérico ("fato relevante") mais forte — normalmente
 o mais longo ou o que repete o termo. Reformular a consulta não muda isso;
 adicionar o ano ajuda só se o ano for conhecido de antemão.
 
-O denso (`nomic-embed-text`) tem o mesmo problema agravado: neste corpus
-regulatório o score fica quase plano (0.80-0.85 nos 1000 melhores), sem
-sinal pra separar documento certo de boilerplate (medições em
-`busca-hibrida.md`). Cross-encoder de reranking foi testado e não
-resolveu (12 min em CPU, e o documento certo continuou fora do top 8).
-
-Roteamento por categoria + blend de recência no vetorial também foi tentado
-e removido: era remendo pra diluição da busca, e o BM25 puro sem eles já
-batia o golden. A solução que ficou é não usar busca pra esse tipo de
-pergunta.
+Busca vetorial tem o mesmo problema agravado: neste corpus regulatório o
+score fica quase plano nos milhares melhores resultados, sem sinal pra
+separar documento certo de boilerplate. A solução é não usar busca pra esse
+tipo de pergunta — dado estruturado ou metadata ordenada (tabela acima).
 
 ## Metadata é o que torna isso possível
 

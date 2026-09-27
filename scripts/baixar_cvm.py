@@ -24,7 +24,7 @@ INDICE_FILE = PDF_DIR / "_ipe_index.json"
 
 CODIGO_CVM = "6505"  # Grupo Casas Bahia S.A.
 # Fase 1 de uma migração por fases pra Central de Downloads (mziq, ver
-# baixar_ri_mziq.py e STATE.md/CS-26): CVM aberta segue cobrindo só o
+# baixar_ri_mziq.py e docs/ingestao.md, CS-26): CVM aberta segue cobrindo só o
 # histórico anterior a 2026 — cada fase futura desce esse limite mais um
 # ano (2025, 2024...) conforme scripts/migrar_ano_para_central.py migra
 # mais um ano. Não é decisão final de "histórico fica pra sempre na CVM".

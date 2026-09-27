@@ -1,5 +1,5 @@
 {
-  "_doc": "Golden set de retrieval: pergunta -> substring(s) do nome do arquivo em data/knowledge/ que contém a resposta. Acerto = algum dos top-K trazer arquivo cujo nome contém qualquer substring de `esperado`. Perguntas marcadas `falha_conhecida: true` são casos reais que a busca vetorial pura não recuperou (ver STATE.md, fase 3.2); as demais funcionavam antes e servem pra pegar regressão. Casos com `parafrase: true` usam vocabulário diferente do documento de propósito (medem o lado semântico, pra não tunar o híbrido só em pergunta léxica).",
+  "_doc": "Golden set de retrieval: pergunta -> substring(s) do nome do arquivo em data/knowledge/ que contém a resposta. Acerto = algum dos top-K trazer arquivo cujo nome contém qualquer substring de `esperado`. Perguntas marcadas `falha_conhecida: true` são casos reais que a busca vetorial pura não recuperou (ver docs/busca-hibrida.md); as demais funcionavam antes e servem pra pegar regressão. Casos com `parafrase: true` usam vocabulário diferente do documento de propósito (medem o lado semântico, pra não tunar o híbrido só em pergunta léxica).",
   "casos": [
     {
       "pergunta": "Quantas lojas deficitárias a Casas Bahia fechou em 2026?",

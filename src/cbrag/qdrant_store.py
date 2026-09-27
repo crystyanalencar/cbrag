@@ -2,7 +2,7 @@
 OpenRouter) + vetor esparso BM25 (fastembed, stemmer português), busca
 híbrida com fusão RRF feita pelo próprio motor.
 
-Por que existe (ver STATE.md, fase 3.2): o corpus é majoritariamente texto
+Por que existe (ver docs/busca-hibrida.md): o corpus é majoritariamente texto
 regulatório formal (atas/comunicados CVM) e a maioria das perguntas que
 falhavam pedia match de termo exato (número de lojas, nome de executivo,
 "remuneração") — ponto fraco de busca só-vetorial. Chroma local não tem
@@ -14,7 +14,7 @@ embeda só denso e filtra só por igualdade simples — não faz híbrido.
 Modo embedded por padrão (arquivos em data/knowledge_storage/qdrant/, sem
 servidor); com QDRANT_URL no .env usa servidor (docker na VM Oracle —
 necessário pra ingestão agendada rodar concorrente com o chat sem disputar
-o lock do arquivo embedded, ver STATE.md).
+o lock do arquivo embedded, ver docs/infra-producao.md).
 
 Denso trocou de Ollama (`nomic-embed-text`, local, exige GPU) pra OpenRouter
 (`qwen/qwen3-embedding-8b`, API) — a VM de produção não tem GPU. Confirmado
@@ -69,7 +69,8 @@ _SOBRA_DEDUP = 4
 # nomic-embed-text/Ollama: bm25 11/14 MRR 0.574 vs híbrido (sem peso) 11/14
 # MRR 0.500 vs denso 5/14 — denso não somava nada, ficou em "bm25".
 # Reavaliado em 2026-09-20 depois da troca pro Qwen3 Embedding 8B/OpenRouter
-# (golden recalculado do zero, corpus 100% reembedado, ver STATE.md): denso
+# (golden recalculado do zero, corpus 100% reembedado, ver
+# docs/busca-hibrida.md): denso
 # sozinho subiu pra 8/14 MRR 0.429 (ainda perde de bm25), híbrido sem peso
 # 11/14 MRR 0.599 (empata recall, MRR melhor), híbrido com peso_bm25=0.7
 # **12/14 MRR 0.699** — melhor resultado de todos, testados 0.6/0.7/0.8
@@ -278,10 +279,11 @@ def indexar_arquivo(caminho: Path) -> int:
     não existia antes. Chunk que sumiu (órfão) é removido; chunk que
     permanece igual não é tocado. Existe pra não repetir o custo de
     embedding em arquivo reenviado quase inteiro a cada versão (FRE via
-    Central de Downloads, ver STATE.md/CS-27) — não resolve o efeito
-    avalanche do chunker por offset fixo (edição no início do documento
-    desloca tudo depois dela e muda quase todo doc_id mesmo assim), só
-    evita o desperdício óbvio quando a mudança não desloca offset.
+    Central de Downloads, ver docs/ingestao.md, CS-27) — não resolve o
+    efeito avalanche do chunker por offset fixo (edição no início do
+    documento desloca tudo depois dela e muda quase todo doc_id mesmo
+    assim), só evita o desperdício óbvio quando a mudança não desloca
+    offset.
 
     O FRE (`kc.CATEGORIA_VERSIONADA`) não sofre disso: tem chunker por
     conteúdo e identidade sem a data (`kc._chunk_fre`), e a comparação é

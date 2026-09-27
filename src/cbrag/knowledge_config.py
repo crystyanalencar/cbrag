@@ -6,7 +6,7 @@ chat usa. O motor (Qdrant, denso + BM25) fica em qdrant_store.py.
 Histórico: até 2026-09-10 o motor era o Chroma via wrapper do CrewAI
 (`crewai.rag.chromadb`). Saiu porque Chroma local não tem vetor esparso
 (BM25 só no Chroma Cloud) e o corpus — texto regulatório da CVM — pede
-busca léxica (ver STATE.md, fase 3.2). Backup do storage antigo em
+busca léxica (ver docs/busca-hibrida.md). Backup do storage antigo em
 `D:/dev/github/_backups/casas_bahia_rag_chroma_2026-09-10/`.
 
 Importante: os vetores densos só fazem sentido pro modelo de embedding que
@@ -38,11 +38,11 @@ RESULTS_LIMIT = 8
 MAX_POR_ARQUIVO_CHAT: int | None = None
 
 OLLAMA_LLM = "ollama/gemma4:e4b"
-# Geração via OpenRouter (fase 4, ver STATE.md) — substituiu Gemini+Groq
-# manual. Lê OPENROUTER_API_KEY do .env (via litellm, `crewai[litellm]`,
-# já instalado pro Groq antigo). Preset free-tier (fase de testes) — ver
-# STATE.md pro achado de modelo grátis ignorando resultado de tool em
-# conversa longa antes de fechar isso pra produção.
+# Geração via OpenRouter (fase 4) — substituiu Gemini+Groq manual. Lê
+# OPENROUTER_API_KEY do .env (via litellm, `crewai[litellm]`, já instalado
+# pro Groq antigo). Preset free-tier (fase de testes) — já se observou
+# modelo grátis ignorando resultado de tool em conversa longa; considerar
+# isso antes de fechar pra produção.
 OPENROUTER_LLM = "openrouter/@preset/free-tier-first"
 
 
@@ -119,7 +119,7 @@ def _chunk_texto(texto: str) -> list[str]:
     """Slicing char-based (mesmo tamanho/overlap desde o início do projeto,
     herdado do TextFileKnowledgeSource do CrewAI) — mudar isso muda o
     doc_id de todo chunk e força reindexar tudo. Chunking por estrutura do
-    documento fica registrado como fase futura no STATE.md."""
+    documento fica registrado como fase futura."""
     return [
         texto[i : i + CHUNK_SIZE]
         for i in range(0, len(texto), CHUNK_SIZE - CHUNK_OVERLAP)
@@ -302,7 +302,8 @@ def buscar_contexto(pergunta: str) -> list[str]:
 def buscar_resultados(pergunta: str, max_por_arquivo: int | None = MAX_POR_ARQUIVO_CHAT) -> list[dict]:
     """Busca que o chat usa: índice Qdrant (qdrant_store.py), modo
     `MODO_CHAT` — híbrido ponderado (`PESO_BM25_CHAT`) desde 2026-09-20,
-    melhor resultado no golden depois da troca de embedder (ver STATE.md).
+    melhor resultado no golden depois da troca de embedder (ver
+    docs/busca-hibrida.md).
     Devolve dicts `{content, metadata, score}` na ordem do ranking, que
     `scripts/avaliar_retrieval.py` usa pra medir recall contra o golden
     sem depender do LLM. Sem roteamento por categoria nem blend de

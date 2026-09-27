@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Migração por fases CVM aberta -> Central de Downloads (mziq), um ano por
-vez (ver STATE.md/CS-26). Execução manual única por fase — não entra no
-`ingest_flow` recorrente.
+vez (ver docs/ingestao.md, CS-26). Execução manual única por fase — não
+entra no `ingest_flow` recorrente.
 
 Pré-condição (checar à mão antes de rodar, não automatizado aqui): o ano já
 foi coletado da Central (`baixar_ri_mziq.py` cobrindo esse ano) e passou por

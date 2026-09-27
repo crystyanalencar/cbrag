@@ -106,7 +106,7 @@ def consultar_composicao_conselho(confirmar: bool = True) -> str:
     (posse original vs. última reeleição) em vez de escolher uma só.
 
     `confirmar` é parâmetro dummy, ignore-o — não precisa passar nada.
-    Existe porque o Groq (usado antes como fallback, ver STATE.md) rejeitava
+    Existe porque o Groq (usado antes como fallback) rejeitava
     em modo strict qualquer tool sem nenhum parâmetro (tratava
     `properties: {}` como ausente, confirmado inspecionando o corpo HTTP
     real — bug do lado do provider, não do litellm/crewai). Mantido mesmo

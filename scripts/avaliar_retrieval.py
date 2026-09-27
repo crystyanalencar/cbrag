@@ -1,9 +1,9 @@
 """Mede o retrieval da base de conhecimento contra tests/golden_retrieval.json.
 
-Por que existe: a fase 3.2 (STATE.md) trocou o motor de busca (Chroma denso
--> Qdrant denso+BM25). Sem número antes e depois, qualquer ajuste de
-modo/peso/embedder vira impressão. Baseline histórico do Chroma (10
-perguntas originais): recall@8 5/10, MRR 0.450.
+Por que existe: a troca de motor de busca (Chroma denso -> Qdrant
+denso+BM25, ver docs/busca-hibrida.md) precisava de número antes e depois —
+sem isso, qualquer ajuste de modo/peso/embedder vira impressão. Baseline
+histórico do Chroma (10 perguntas originais): recall@8 5/10, MRR 0.450.
 
 Métricas (por pergunta, agregadas no fim):
 - recall@K: 1 se algum dos top-K trouxe um arquivo esperado, senão 0.

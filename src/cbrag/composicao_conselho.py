@@ -3,7 +3,7 @@
 responder pergunta de conselho/diretoria/conselho fiscal com a versão mais
 recente arquivada, em vez de depender de busca vetorial sobre atas de
 assembleia (que confunde membro atual com membro que já renunciou, ver
-STATE.md).
+docs/retrieval.md).
 """
 import json
 from pathlib import Path

@@ -1,7 +1,6 @@
 # Ingestão: fontes, incremental e custo
 
-Referência durável do pipeline que alimenta o índice. Sem status — o que
-está aplicado ou pendente fica no `STATE.md`. Detalhe de cada fonte
+Referência durável do pipeline que alimenta o índice. Detalhe de cada fonte
 (Akamai, Wayback, CVM): `fontes-de-dados.md`.
 
 ## Dois Flows, não um
@@ -34,25 +33,19 @@ por injeção de contexto.
 função de embedding para todo o batch sempre). O upsert evita duplicar
 armazenamento, não evita a chamada paga.
 
-**Limite do diff por chunk — efeito avalanche**: o chunker é por offset fixo
-(2000/200). Edição pequena no começo do documento desloca todo chunk depois
-e muda quase todo hash sem conteúdo novo. Content-Defined Chunking (a técnica
-de fronteira estável de restic/borgbackup) é a saída conhecida; LangChain
-Indexing API (record manager por hash de chunk, limpa órfão) e LlamaIndex
-`IngestionPipeline` + `DocstoreStrategy.UPSERTS` resolvem o mesmo problema
-em nível de framework.
+**Limite do diff por chunk**: o chunker é por offset fixo (2000/200). Edição
+pequena no começo do documento desloca todo chunk depois e muda quase todo
+hash sem conteúdo novo — exceto no FRE, que usa chunking por conteúdo
+(abaixo).
 
 **FRE: só o delta entra (`kc._chunk_fre`, `qs.indexar_arquivo`).** O
 Formulário de Referência (~350 páginas) é republicado várias vezes por mês
-com poucas mudanças, e o chunker de offset fixo mais o cabeçalho com a data
-faziam cada versão reembedar 100% (medido em 5 versões distintas). Três
-decisões:
-- **Chunking por conteúdo, em cima de palavras, não de linhas.** O PDF é
-  reflowed entre versões: entre duas delas 39% das linhas diferiam com 2,6%
-  de texto novo. A fronteira cai no fim de uma sentença cujo hash das últimas
-  4 palavras satisfaz uma condição (depois de 700 caracteres), então uma
-  edição só muda o chunk que a contém. Chunker por linha foi tentado antes e
-  deu 562 chunks novos onde o de palavras dá 291 (v2 -> v3).
+com poucas mudanças.
+- **Chunking por conteúdo, em cima de palavras, não de linhas** (o PDF é
+  reflowed entre versões, então fronteira por linha desloca demais). A
+  fronteira cai no fim de uma sentença cujo hash das últimas 4 palavras
+  satisfaz uma condição (depois de 700 caracteres), então uma edição só muda
+  o chunk que a contém.
 - **Identidade sem cabeçalho e sem página.** `doc_id` = hash das palavras do
   chunk. Saem do texto o índice do FRE, a numeração de página, o rodapé
   "Versão : N" e o ruído de assinatura eletrônica (Docusign, ID do
@@ -63,14 +56,12 @@ decisões:
   embeda o que é novo, remove o que sumiu, e só atualiza o payload
   (cabeçalho com versão/data, `arquivo`) do que ficou, sem reembedar.
   `preparar_knowledge.py` descarta as versões anteriores do corpus (fica a
-  de data mais recente; empate, a de maior "Versão :"). Custo: histórico do
-  FRE não é consultável no índice, só o estado atual.
+  de data mais recente; empate, a de maior "Versão :"). Histórico do FRE não
+  é consultável no índice, só o estado atual.
 
-Resultado nas 5 versões distintas do FRE de 2026 (chunks novos por versão,
-novo x legado): 717 x 501, 155 x 497, 291 x 495, 1 x 495, 25 x 486.
-`scripts/testar_fre_incremental.py` reproduz isso sem gastar embedding e
-falha se o chunker perder palavra, passar de `CHUNK_SIZE` ou embedar mais que
-o delta. Rodar de novo ao mexer no chunker do FRE: mudar `FRE_*` invalida a
+`scripts/testar_fre_incremental.py` reproduz o reindex sem gastar embedding
+e falha se o chunker perder palavra, passar de `CHUNK_SIZE` ou embedar mais
+que o delta. Rodar ao mexer no chunker do FRE: mudar `FRE_*` invalida a
 identidade de todos os chunks (reembeda o FRE inteiro, uma vez).
 
 **O manifesto descreve um índice específico, não o corpus-fonte.** Quando ele
@@ -135,7 +126,7 @@ base e entra no RAG como PDF.
 
 - **CVM aberta** (`dados.cvm.gov.br`, IPE): um zip por ano, atualizado
   incrementalmente com lag de ~4-5 dias (o zip do ano corrente existe e
-  cresce; uma conclusão anterior de "só fecha no fim do ano" estava errada).
+  cresce ao longo do ano, não só fecha no fim).
 - **Central de Downloads do RI** (`api.mziq.com`, plataforma Mziq): API JSON
   de terceiro, **sem Akamai**, `curl` puro funciona. Documento direto da
   companhia, sem intermediário. Fonte de 2026 em diante.
@@ -261,14 +252,13 @@ nada passa pelo embedding):
 - Fora do desenho: Conciliação FC (matriz de um período só) e o RAG sobre o
   xlsx.
 
-## Akamai: a causa é headless, não IP
+## Akamai: bloqueio é por detecção de headless, não IP
 
-Site institucional e RI (`ri.grupocasasbahia.com.br`) usam Akamai. Testado em
-três camadas: `curl`/`requests` com headers completos → 403; Playwright
-**headless** (Chromium real) → 403; Playwright **headed** (via Xvfb, servidor
-sem tela) → 200. O bloqueio é detecção de headless; reproduzido também de IP
-de datacenter. A Central de Downloads dispensa isso por ser API separada,
-mas o caminho headed é o plano B se algo do RI só existir no site.
+Site institucional e RI (`ri.grupocasasbahia.com.br`) usam Akamai, que
+bloqueia acesso headless (`curl`, Playwright headless) mesmo com headers de
+browser real, mas libera Playwright **headed** (via Xvfb, servidor sem
+tela). A Central de Downloads dispensa isso por ser API separada; o caminho
+headed é o plano B se algo do RI só existir no site.
 
 ## Extração de PDF
 
@@ -282,9 +272,8 @@ iniciais da recuperação judicial, por exemplo).
 ## Custo e agenda
 
 - Embedding denso: `qwen/qwen3-embedding-8b` via OpenRouter, dimensão 4096
-  (o `nomic-embed-text` do Ollama não existe no catálogo do OpenRouter —
-  checado na API; e a VM não tem GPU). Qwen3 Embedding também roda no Ollama
-  se um dia valer rodar local.
+  (o `nomic-embed-text` do Ollama, usado antes, não existe no catálogo do
+  OpenRouter — checado na API; e a VM não tem GPU pra rodar local).
 - Corpus completo: ~23 mil chunks. Estimar chunks e custo **antes** de
   embedar (OpenRouter cobra por token).
 - Execução: timer systemd na VM (`cbrag-ingest.{service,timer}`, fora do
@@ -296,18 +285,3 @@ iniciais da recuperação judicial, por exemplo).
   com `chown -R 1000:1000`.
 - `coletar_dre_estruturada` refaz o histórico completo a cada run (sem
   incremental) e tem custo de rede, não de token.
-
-## Extração genérica de fatos temporais (ideia, não construída)
-
-Pergunta de trajetória no tempo pra assunto não previsto (dívida, litígio,
-parceria) não se resolve com regex por assunto — isso é o mesmo erro de
-sempre, só trocou de mecanismo. Direção reconhecida: extração de fatos por
-LLM no ingest, estilo GraphRAG (schema fixo `entidade, atributo, valor,
-data, documento_fonte`, custo pago uma vez por documento, consulta sobre a
-tabela de fatos, não sobre texto). Refinamento do usuário: **extração
-dirigida por âncora** — partir do estado atual conhecido (FRE) e caminhar
-pra trás só nos documentos da categoria/cargo, até a ponta mais recente da
-cadeia coincidir com a âncora (teste de sanidade de graça; extração cega não
-tem). Distinção: fato discreto com valor explícito é extração pura;
-tendência sobre série numérica é cálculo sobre dado estruturado
-(`consultar_serie_historica_resultado`), não extração.

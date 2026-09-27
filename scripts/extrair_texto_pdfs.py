@@ -43,7 +43,7 @@ def deve_pular(caminho: Path) -> bool:
 # detecção por linha não acha a área e detecção por texto junta a página
 # inteira (prosa incluída) numa "tabela" só, fragmentando frase em palavra
 # solta — piorava o texto em vez de melhorar. Mitigação ficou pro prompt do
-# agente (main.py), não na extração — ver STATE.md.
+# agente (main.py), não na extração.
 def extrair_texto(caminho: Path) -> str:
     leitor = PdfReader(caminho)
     paginas = [pagina.extract_text() or "" for pagina in leitor.pages]

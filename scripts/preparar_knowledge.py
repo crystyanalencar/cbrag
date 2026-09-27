@@ -111,7 +111,7 @@ def campos_cvm(nome_arquivo: str, indice: dict[str, dict]) -> dict:
     assunto, data de referência) pro documento — vazio se o arquivo não
     está no índice (HTML do site, PDF institucional, ou índice ainda não
     gerado). São esses campos, não o slug do nome do arquivo, que viram
-    filtro/payload na base (ver STATE.md, fase 3.2).
+    filtro/payload na base (ver docs/busca-hibrida.md).
 
     O índice da Central (`baixar_ri_mziq.classificar`) tem o mesmo formato;
     documento sem categoria CVM equivalente vem sem `categoria`."""

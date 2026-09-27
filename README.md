@@ -1,5 +1,9 @@
 # cbrag
 
+![Python](https://img.shields.io/badge/python-3.10%20--%203.13-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-em%20produção-brightgreen)
+
 Chatbot RAG conversacional sobre a Grupo Casas Bahia (institucional, RI,
 governança e financeiro), construído com [CrewAI](https://crewai.com) sobre
 documentos públicos da CVM e do site institucional da empresa — não sobre
@@ -8,6 +12,19 @@ memória do modelo. Em produção: **[cbrag.ialencar.com.br](https://cbrag.ialen
 História de como o projeto chegou nesse formato, contada em prosa:
 [cbrag.ialencar.com.br/docs](https://cbrag.ialencar.com.br/docs). Este
 documento é a referência técnica.
+
+## Por que este projeto é interessante
+
+- **Retrieval híbrido medido, não por impressão manual** — todo ajuste de
+  busca (BM25 puro → denso → híbrido, pesos diferentes) validado contra um
+  golden set com recall@8 e MRR (`tests/golden_retrieval.json`).
+- **Dado exato não passa por busca semântica** — resultado financeiro
+  trimestral e composição de conselho vêm de dataset oficial da CVM
+  (tool determinística), não de PDF lido por similaridade.
+- **Ingestão incremental de verdade** — hash SHA-256 por arquivo evita
+  reprocessar (e reembedar, com custo real de API) documento que não mudou.
+- **Em produção real**, 24/7, atrás de Cloudflare, com ingestão diária
+  automática — não é só `docker run` local.
 
 ## Status
 
@@ -227,6 +244,10 @@ de sistema é resposta errada por recuperação errada, não exceção de códig
 Este é um projeto de portfólio pessoal, sem vínculo, chancela ou afiliação
 com a Grupo Casas Bahia. Usa exclusivamente dados públicos (CVM, site
 institucional via Wayback Machine).
+
+## Licença
+
+[MIT](LICENSE).
 
 ## Autoria
 

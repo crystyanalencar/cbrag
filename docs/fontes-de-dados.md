@@ -11,11 +11,8 @@ testado:
 
 O bloqueio não é IP nem fingerprint de TLS: é **detecção de headless**.
 Playwright em modo *headed* (via Xvfb, em servidor sem tela) recebe 200 com
-HTML completo, inclusive de IP de datacenter (reproduzido local e na VM de
-produção). Proxy residencial ou serviço anti-bot resolveriam de outro jeito,
-mas são custo recorrente pra pegar conteúdo que tem fonte pública alternativa
-(abaixo) — não foi o caminho escolhido. A Central de Downloads do RI, que é
-uma API separada sem Akamai, dispensa isso (ver `ingestao.md`).
+HTML completo, inclusive de IP de datacenter. A Central de Downloads do RI,
+que é uma API separada sem Akamai, dispensa isso (ver `ingestao.md`).
 
 ## Contorno: Wayback Machine
 

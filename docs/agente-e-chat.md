@@ -1,8 +1,7 @@
 # Agente, tools e interface de chat
 
-Referência durável de como o agent se comporta e por quê. Sem status — o que
-está aplicado ou pendente fica no `STATE.md`. A escolha de ferramenta por
-tipo de pergunta está em `retrieval.md`.
+Referência durável de como o agent se comporta e por quê. A escolha de
+ferramenta por tipo de pergunta está em `retrieval.md`.
 
 ## Arquitetura
 
@@ -27,18 +26,15 @@ roteador**, e diz também quando NÃO usar a concorrente.
 Regra que se provou várias vezes: instrução em prompt/docstring reduz o
 erro, não o elimina. O que precisa valer sempre vai pro código.
 
-- **Fabricação de explicação.** Perguntado "desde quando há resultado
-  negativo", o LLM chamou a série com `ano_fim=2024` por conta própria; ao
-  ser questionado por que faltava 2025, inventou que "o sistema cobre só até
-  2024". A instrução explícita no prompt não impediu (confirmado nos args
-  reais da chamada seguinte). Fix estrutural em `serie_resultado_financeiro`:
-  se `ano_fim` esconde dado mais recente, a função anexa todos os trimestres
-  posteriores com nota "fora do intervalo pedido, mas dado mais recente".
-- **Loop de reformulação.** Modelo instável repetia a mesma busca 15-20
-  vezes. Proteção estrutural: `Agent(max_iter=8)`. `max_execution_time` é
-  **inerte** em `Agent.kickoff()` (`_prepare_kickoff` só repassa `max_iter`;
-  o timeout só existe em `execute_task()`/Crew), então não dá falsa
-  segurança.
+- **Fabricação de explicação.** Se `ano_fim` (passado pelo LLM) esconde dado
+  mais recente, `serie_resultado_financeiro` anexa todos os trimestres
+  posteriores com a nota "fora do intervalo pedido, mas dado mais recente" —
+  guarda estrutural contra o modelo inventar que "o sistema cobre só até
+  aquele ano".
+- **Loop de reformulação.** `Agent(max_iter=8)` limita repetição de busca.
+  `max_execution_time` é **inerte** em `Agent.kickoff()` (`_prepare_kickoff`
+  só repassa `max_iter`; o timeout só existe em `execute_task()`/Crew), então
+  não dá falsa segurança.
 - **Data de hoje**: `inject_date=True` (recalculado por chamada). Um
   `date.today()` no f-string do backstory ficava fixo no import — container
   no ar por semanas ficaria com "hoje" velho. Sem a data, "até hoje" era
@@ -64,31 +60,23 @@ erro, não o elimina. O que precisa valer sempre vai pro código.
   a própria empresa nunca soma: fechamento líquido rolling de 12 meses,
   evento pontual da fase 2 pós-RJ (298 lojas, comunicado de 18/08/2026) e
   acumulado da fase 1 2023-2024. Resposta cita cada número com seu
-  período/evento e avisa que não há total consolidado. Extrair série
-  trimestral pra somar foi avaliado e descartado (mesmo esforço da DRE, valor
-  baixo).
+  período/evento e avisa que não há total consolidado.
 - Não trocar de posição só porque o usuário contestou: rebuscar antes.
-- Citar fonte/data só quando o usuário pede (citar sempre irritava).
-- Não se apresentar como "modelo de linguagem treinado pelo Google" e travar
-  em pt-BR (modelo do preset trocou pra espanhol no meio de uma conversa).
+- Citar fonte/data só quando o usuário pede.
+- Não se apresentar como "modelo de linguagem treinado pelo Google"; travar
+  resposta em pt-BR independente do modelo escolhido pelo preset.
 - O cabeçalho do chunk não expõe o slug do arquivo (o LLM repete o que lê).
 
 ## Provider de LLM
 
 Geração via OpenRouter com **preset** (`openrouter/@preset/free-tier-first`),
 controlado no painel — modelo, ordem, reasoning e limite de gasto ficam do
-lado do provider, não no código (decisão do usuário). Consequência: o modelo
-muda por chamada; comportamento errático (identidade genérica, troca de
-idioma, loop) é tratado com backstory, `max_iter` e tools determinísticas,
-não trocando modelo. Modelo só-grátis falhou em conversa longa (118k tokens
-acumulados): ignorou o resultado de tool e fabricou data de eleição e um
-diretor. Dois grátis também falharam juntos num pico (429 e 504).
-
-Histórico que explica o código atual: Ollama local → Gemini com fallback
-Groq (retry, detecção de 429/503) → OpenRouter. Toda a lógica de fallback e
-retry manual foi removida; `_kickoff()` só captura exceção pra não derrubar
-o chat. Bug conhecido do `crewai` na época do Groq (litellm): a lib marca
-mensagens com `cache_breakpoint` e só o provider Anthropic sabe removê-lo.
+lado do provider, não no código. Consequência: o modelo muda por chamada;
+comportamento errático (identidade genérica, troca de idioma, loop,
+conversa longa ignorando resultado de tool) é tratado com backstory,
+`max_iter` e tools determinísticas, não trocando modelo. `_kickoff()` só
+captura exceção pra não derrubar o chat — sem fallback nem retry manual
+entre providers, isso é papel do preset do OpenRouter.
 
 ## Desempenho
 
@@ -121,16 +109,14 @@ processo, em modo embedded).
 - `on_chat_end` pode disparar pra sessão em que `on_chat_start` nunca rodou
   (troca de rede, recarga no celular): `encerrar()` e `responder()` criam o
   Flow se faltar.
-- **Marca**: logo/avatar/favicon eram o logo oficial da Grupo Casas Bahia
-  (risco de marca registrada). Trocados por ícone SVG original; disclaimer de
+- **Marca**: logo/avatar/favicon são ícone SVG original, não o logo oficial
+  da Grupo Casas Bahia (risco de marca registrada); disclaimer de
   não-afiliação em `chainlit.md` e no rodapé da landing. `logo_*`,
   `favicon.*` e `avatars/{nome}.*` são resolvidos por glob, extensão livre.
-- Modo escuro automático (`prefers-color-scheme`) foi removido do site
-  estático (parecia "muito escuro" com o SO em dark); toggle manual com
-  `localStorage`.
-- Cor de marca: usar fonte confiável (`theme-color` do `<meta>` do site
-  institucional, `#0033C6`; acento `#e71a3b`), nunca hex tirado de grep bruto
-  (o laranja veio de selo promocional).
+- Tema do site estático: toggle manual (`localStorage`), sem
+  `prefers-color-scheme` automático.
+- Cor de marca vem do `theme-color` do `<meta>` do site institucional
+  (`#0033C6`; acento `#e71a3b`).
 - `allow_origins` restrito ao domínio de produção.
 
 ## Observabilidade local

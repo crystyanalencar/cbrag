@@ -56,7 +56,7 @@ class IngestFlow(Flow[IngestState]):
     def coletar_wayback(self):
         # Não-bloqueante: Wayback já se mostrou instável (web.archive.org
         # fora do ar trava o crawl inteiro) e rende pouco valor pro chatbot
-        # comparado ao CVM (ver STATE.md) — falha aqui não deve impedir as
+        # comparado ao CVM — falha aqui não deve impedir as
         # etapas seguintes de rodar com o que já existe em data/corpus/.
         try:
             resultado = crawl_wayback.main()
@@ -75,7 +75,8 @@ class IngestFlow(Flow[IngestState]):
     @listen(coletar_cvm)
     def coletar_ri_central(self):
         # Central de Downloads do RI (mziq) — fonte de 2026 em diante (ver
-        # STATE.md/CS-26); CVM aberta (coletar_cvm) segue só com histórico.
+        # docs/ingestao.md, CS-26); CVM aberta (coletar_cvm) segue só com
+        # histórico.
         resultado = baixar_ri_mziq.main()
         for chave, valor in resultado.items():
             setattr(self.state, chave, valor)
@@ -86,7 +87,7 @@ class IngestFlow(Flow[IngestState]):
         # aos PDFs de "dados econômico-financeiros" já baixados por
         # coletar_cvm — mesma informação, mas com DT_INI_EXERC/DT_FIM_EXERC
         # exatos por linha, sem ambiguidade de coluna que a extração de
-        # texto do PDF não resolve (ver dados_financeiros.py, STATE.md).
+        # texto do PDF não resolve (ver dados_financeiros.py).
         resultado = baixar_dfp_itr.main()
         for chave, valor in resultado.items():
             setattr(self.state, chave, valor)
