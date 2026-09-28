@@ -275,6 +275,25 @@ def buscar_conhecimento(consulta: str, meses_recentes: int | None = None) -> str
     explicitamente que a base não traz um total consolidado único pro
     intervalo pedido, se não trouxer.
 
+    Pergunta sobre LISTA/RELAÇÃO NOMINAL de credor ou fornecedor essencial
+    da recuperação judicial ("quais são os credores essenciais?", "lista de
+    fornecedores essenciais", "quem são os credores?") vive num ANEXO
+    TABULAR da Petição Inicial (doc. 20 = fornecedores essenciais
+    classificados, doc. 9 = relação nominal de credores) — não no corpo
+    narrativo do processo. Consulta em linguagem natural ("lista de
+    credores essenciais") traz o corpo narrativo (que fala em "contrato
+    essencial" em tese, sem nomear ninguém) e NUNCA o anexo, porque o chunk
+    de linha de tabela (ex. "GOOGLE CLOUD ... Essencial") só tem semântica
+    no cabeçalho da tabela, que fica em chunk separado. Se a primeira busca
+    responder só em tese (sem nome de empresa/pessoa), refaça a busca
+    IMITANDO o formato da tabela em vez da pergunta do usuário: cabeçalho
+    de coluna + um nome de exemplo plausível do setor, ex. "Fornecedor CNPJ
+    Nome do fornecedor Classificação Essencial" pra fornecedor, "Devedor
+    Classificação Credor Extraconcursal" pra credor. Nunca conclua "a base
+    não lista nominalmente" só porque a primeira busca (linguagem natural)
+    não achou — essa forma de busca não é capaz de achar o anexo mesmo
+    quando ele existe.
+
     `meses_recentes`: corta candidato mais velho que N meses ANTES de
     ranquear — não é peso, é filtro (documento fora da janela nem entra na
     disputa). Use quando a pergunta for sobre "situação atual"/"o que
