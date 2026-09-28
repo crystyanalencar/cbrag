@@ -294,12 +294,23 @@ def _ler_metadata_sidecar() -> dict[str, dict]:
     return json.loads(METADATA_SIDECAR.read_text(encoding="utf-8"))
 
 
-def buscar_contexto(pergunta: str) -> list[str]:
+def buscar_contexto(pergunta: str, meses_recentes: int | None = None) -> list[str]:
     """Só o texto dos trechos, pro LLM — ver `buscar_resultados`."""
-    return [r["content"] for r in buscar_resultados(pergunta)]
+    return [r["content"] for r in buscar_resultados(pergunta, meses_recentes=meses_recentes)]
 
 
-def buscar_resultados(pergunta: str, max_por_arquivo: int | None = MAX_POR_ARQUIVO_CHAT) -> list[dict]:
+def _ordinal_ha_meses(meses: int) -> int:
+    from datetime import date
+
+    ano, mes_bruto = divmod(date.today().month - 1 - meses, 12)
+    return date(date.today().year + ano, mes_bruto + 1, date.today().day if date.today().day <= 28 else 28).toordinal()
+
+
+def buscar_resultados(
+    pergunta: str,
+    max_por_arquivo: int | None = MAX_POR_ARQUIVO_CHAT,
+    meses_recentes: int | None = None,
+) -> list[dict]:
     """Busca que o chat usa: índice Qdrant (qdrant_store.py), modo
     `MODO_CHAT` — híbrido ponderado (`PESO_BM25_CHAT`) desde 2026-09-20,
     melhor resultado no golden depois da troca de embedder (ver
@@ -308,10 +319,20 @@ def buscar_resultados(pergunta: str, max_por_arquivo: int | None = MAX_POR_ARQUI
     `scripts/avaliar_retrieval.py` usa pra medir recall contra o golden
     sem depender do LLM. Sem roteamento por categoria nem blend de
     recência: eram remendos pra diluição da busca vetorial, e o BM25 sem
-    eles já supera o Chroma com eles no golden."""
+    eles já supera o Chroma com eles no golden.
+
+    `meses_recentes`: filtro **determinístico** por `data_ordinal` (corta
+    candidato fora da janela, não pondera) — opt-in, não confundir com o
+    "blend de recência" descartado acima. Ver `qdrant_store._filtro_data_minima`
+    pro porquê de ser filtro."""
     from cbrag import qdrant_store  # import local: qdrant_store importa este módulo
 
     peso_bm25 = qdrant_store.PESO_BM25_CHAT if qdrant_store.MODO_CHAT == "hibrido" else None
+    ordinal_min = _ordinal_ha_meses(meses_recentes) if meses_recentes is not None else None
     return qdrant_store.buscar(
-        pergunta, modo=qdrant_store.MODO_CHAT, peso_bm25=peso_bm25, max_por_arquivo=max_por_arquivo
+        pergunta,
+        modo=qdrant_store.MODO_CHAT,
+        peso_bm25=peso_bm25,
+        max_por_arquivo=max_por_arquivo,
+        data_ordinal_min=ordinal_min,
     )

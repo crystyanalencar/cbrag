@@ -374,6 +374,30 @@ def _filtro_categorias(categorias: list[str] | None) -> models.Filter | None:
     )
 
 
+def _filtro_data_minima(data_ordinal_min: int | None) -> models.Filter | None:
+    """Filtro **determinístico** por `data_ordinal` (payload indexado, ver
+    `criar_colecao`) — exclui documento fora da janela, não pondera score.
+    Não confundir com "blend de recência" (`knowledge_config.buscar_resultados`
+    já documenta que isso foi tentado e removido: era remendo pra diluição da
+    busca vetorial pré-Qdrant/híbrido). A diferença importa: o corpus é
+    majoritariamente jurídico-regulatório (docs/busca-hibrida.md), onde
+    documento antigo tem que continuar competindo em pé de igualdade quando a
+    pergunta é sobre fato antigo ("quem era o CEO em 2020") — pesar por idade
+    globalmente penalizaria esse caso. Este filtro só corta a janela quando o
+    chamador pede explicitamente (`buscar_conhecimento(meses_recentes=...)`),
+    nunca por padrão."""
+    if data_ordinal_min is None:
+        return None
+    return models.Filter(
+        must=[models.FieldCondition(key="data_ordinal", range=models.Range(gte=data_ordinal_min))]
+    )
+
+
+def _combinar_filtros(*filtros: models.Filter | None) -> models.Filter | None:
+    musts = [c for f in filtros if f is not None for c in f.must]
+    return models.Filter(must=musts) if musts else None
+
+
 def buscar(
     pergunta: str,
     modo: str = "hibrido",
@@ -382,6 +406,7 @@ def buscar(
     profundidade: int = PROFUNDIDADE,
     peso_bm25: float | None = None,
     max_por_arquivo: int | None = None,
+    data_ordinal_min: int | None = None,
 ) -> list[dict]:
     """Devolve `[{content, metadata, score}]` na ordem do ranking.
 
@@ -395,12 +420,16 @@ def buscar(
     Busca `limite * _SOBRA_DEDUP` candidatos e preenche `limite` respeitando
     o teto, pra um documento longo (o FRE, a Petição) não ocupar o top-k
     inteiro e esconder os demais.
+
+    `data_ordinal_min`: corta candidato com `data_ordinal` menor (filtro no
+    motor, antes do ranking) — ver `_filtro_data_minima` pro porquê de ser
+    filtro e não peso.
     """
     limite_final = limite
     if max_por_arquivo is not None:
         limite = limite_final * _SOBRA_DEDUP
     c = cliente()
-    filtro = _filtro_categorias(categorias)
+    filtro = _combinar_filtros(_filtro_categorias(categorias), _filtro_data_minima(data_ordinal_min))
     prefetches = _montar_prefetches(pergunta, modo, filtro, profundidade)
     pontos = _executar_query(c, prefetches, filtro, limite, profundidade, peso_bm25)
     return _aplicar_teto_por_arquivo(pontos, limite_final, max_por_arquivo)

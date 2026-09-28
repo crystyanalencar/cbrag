@@ -63,13 +63,21 @@ def main() -> int:
         "--max-por-arquivo", type=int, default=kc.MAX_POR_ARQUIVO_CHAT,
         help="teto de chunks do mesmo arquivo no top-k (só no modo chat)",
     )
+    parser.add_argument(
+        "--meses-recentes", type=int, default=None,
+        help="filtro de data_ordinal_min (só no modo chat) — mede se o filtro "
+        "determinístico recupera as falhas conhecidas de 'mais recente' sem "
+        "regredir as demais",
+    )
     parser.add_argument("--verboso", action="store_true", help="lista os arquivos devolvidos por pergunta")
     args = parser.parse_args()
 
     casos = json.loads(GOLDEN.read_text(encoding="utf-8"))["casos"]
     buscar = MODOS[args.modo]
     if args.modo == "chat":
-        buscar = lambda pergunta: kc.buscar_resultados(pergunta, max_por_arquivo=args.max_por_arquivo)  # noqa: E731
+        buscar = lambda pergunta: kc.buscar_resultados(  # noqa: E731
+            pergunta, max_por_arquivo=args.max_por_arquivo, meses_recentes=args.meses_recentes
+        )
 
     acertos = 0
     soma_rr = 0.0

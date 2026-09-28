@@ -183,7 +183,18 @@ def consultar_indicadores_operacionais(
     NÃO use pra receita, lucro ou resultado contábil (é
     `consultar_resultado_financeiro`, dataset oficial da CVM, e prevalece se
     os dois divergirem). Não substitui `buscar_conhecimento` pra o porquê de
-    um número: esta tool só traz o número."""
+    um número: esta tool só traz o número.
+
+    ATENÇÃO pra "lojas" especificamente: "Fechadas" aqui é só a
+    movimentação daquele trimestre isolado (tipicamente poucas unidades).
+    Um fechamento em massa anunciado como parte de plano de reestruturação
+    (ex.: Plano de Transformação, recuperação judicial) é um número
+    cumulativo bem maior e vive só em documento narrativo, não nesta
+    planilha — nesses casos, chame também `buscar_conhecimento` e, se ela
+    trouxer um total de fechamento maior/mais relevante pra pergunta,
+    inclua os dois números explicando a diferença (movimentação do
+    trimestre vs. total acumulado do plano) em vez de responder só com o
+    menor."""
     resultado = contexto_indicadores(
         assunto, ano=ano, trimestre=trimestre, quantidade_trimestres=quantidade_trimestres
     )
@@ -213,7 +224,7 @@ def consultar_cobertura_da_base(quantidade: int = 10) -> str:
 
 
 @tool("buscar_conhecimento")
-def buscar_conhecimento(consulta: str) -> str:
+def buscar_conhecimento(consulta: str, meses_recentes: int | None = None) -> str:
     """Busca trechos relevantes na base de conhecimento institucional da
     Grupo Casas Bahia (site institucional, RI, fatos relevantes, atas de
     assembleia/administração, comunicados ao mercado, demonstrações
@@ -262,8 +273,19 @@ def buscar_conhecimento(consulta: str) -> str:
     lojas fechadas numa ação pontual em ago/2026" e, separadamente, "60
     lojas fechadas até o 2T24 desde o início do plano em 2023"), e diga
     explicitamente que a base não traz um total consolidado único pro
-    intervalo pedido, se não trouxer."""
-    chunks = buscar_contexto(consulta)
+    intervalo pedido, se não trouxer.
+
+    `meses_recentes`: corta candidato mais velho que N meses ANTES de
+    ranquear — não é peso, é filtro (documento fora da janela nem entra na
+    disputa). Use quando a pergunta for sobre "situação atual"/"o que
+    aconteceu recentemente"/"total até agora" e a primeira busca sem filtro
+    trouxer documento claramente antigo (ex.: earnings release de anos
+    atrás) em vez do fato mais novo sobre o mesmo assunto — sinal disso é a
+    data no cabeçalho "[Fonte: ... | Data: ...]" do trecho vir muito antes
+    do que a pergunta pede. Não use como primeira tentativa (pergunta sobre
+    fato histórico específico não deve ser cortada por data), só como
+    refinamento depois que a busca genérica trouxer algo desatualizado."""
+    chunks = buscar_contexto(consulta, meses_recentes=meses_recentes)
     if not chunks:
         return "Nada relevante encontrado na base de conhecimento pra essa pergunta."
     return "\n\n---\n\n".join(chunks)

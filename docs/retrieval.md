@@ -113,3 +113,40 @@ resultado sem a CVM 2026 (busca 40 candidatos e descarta os arquivos dela). Na
 migração de 2026 a simulação previu 10/14 e o real deu 10/14; o que muda é o
 caso "tem certeza sobre o número de lojas?", que só passava pelo arquivo da
 CVM e volta a falhar.
+
+## Filtro de data determinístico: opt-in, não blend de recência
+
+O caso "tem certeza sobre o número de lojas? houve fechamento de lojas
+recentemente?" (golden, `falha_conhecida`) é o mesmo padrão de "mais recente
+não tem âncora lexical" descrito acima, com uma variante: o corpus tem
+*vários* documentos ao longo dos anos discutindo "fechamento de lojas"/"plano
+de transformação", cada um com um número diferente (298 lojas desde o início
+do plano, 55-57 lojas em 2023/2024, 9 lojas nos últimos 12 meses) — a busca
+híbrida pode trazer qualquer um deles, inclusive o mais antigo, porque nenhum
+motor tem sinal de recência.
+
+Diferente do resto desta página (onde a resposta é "não use busca, use dado
+estruturado"), aqui o fato É narrativo — não existe tabela estruturada pra
+"fechamento cumulativo do plano". A solução testada foi filtro
+**determinístico** de `data_ordinal` (`qdrant_store._filtro_data_minima`,
+payload já indexado), exposto como `buscar_conhecimento(meses_recentes=N)` —
+corta candidato fora da janela antes do ranking, não pondera score.
+
+Pesquisado antes de implementar: um "blend de recência" (pesar score por
+idade) já foi tentado e removido antes (`knowledge_config.buscar_resultados`
+ainda documenta isso) — era remendo pra busca vetorial fraca da era Chroma, e
+literatura de RAG temporal confirma que decay agressivo prejudica recall e
+precisa de meia-vida ajustada por tipo de conteúdo (documento jurídico/
+regulatório aguenta ~1 ano sem perder relevância, diferente de notícia).
+Filtro é opt-in por chamada: sem isso, pergunta sobre fato antigo ("quem era
+o CEO em 2020") continua competindo em pé de igualdade.
+
+Medido com `scripts/avaliar_retrieval.py --meses-recentes N --verboso`:
+aplicado a UMA pergunta (a que já falhava), o caso vira `OK` (documento de
+2T26 entra no top-8). Aplicado **a todas as 14** do golden (simulação de uso
+incorreto, só pra confirmar o mecanismo), recall cai de 10/14 pra 7/14 — os
+casos de fato antigo (2020/2021/2023) somem do top-8 porque o filtro os
+exclui. Isso não é regressão do golden padrão (o modo "chat" do script não
+passa `meses_recentes`, então o comportamento sem filtro continua 10/14); é
+a confirmação de que o filtro tem que ser decisão da LLM por pergunta —
+nunca default global — e a docstring da tool instrui isso.
