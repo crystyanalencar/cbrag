@@ -294,9 +294,9 @@ def _ler_metadata_sidecar() -> dict[str, dict]:
     return json.loads(METADATA_SIDECAR.read_text(encoding="utf-8"))
 
 
-def buscar_contexto(pergunta: str, meses_recentes: int | None = None) -> list[str]:
+def buscar_contexto(pergunta: str, meses_recentes: int | None = None, limite: int | None = None) -> list[str]:
     """Só o texto dos trechos, pro LLM — ver `buscar_resultados`."""
-    return [r["content"] for r in buscar_resultados(pergunta, meses_recentes=meses_recentes)]
+    return [r["content"] for r in buscar_resultados(pergunta, meses_recentes=meses_recentes, limite=limite)]
 
 
 def _ordinal_ha_meses(meses: int) -> int:
@@ -310,6 +310,7 @@ def buscar_resultados(
     pergunta: str,
     max_por_arquivo: int | None = MAX_POR_ARQUIVO_CHAT,
     meses_recentes: int | None = None,
+    limite: int | None = None,
 ) -> list[dict]:
     """Busca que o chat usa: índice Qdrant (qdrant_store.py), modo
     `MODO_CHAT` — híbrido ponderado (`PESO_BM25_CHAT`) desde 2026-09-20,
@@ -324,7 +325,11 @@ def buscar_resultados(
     `meses_recentes`: filtro **determinístico** por `data_ordinal` (corta
     candidato fora da janela, não pondera) — opt-in, não confundir com o
     "blend de recência" descartado acima. Ver `qdrant_store._filtro_data_minima`
-    pro porquê de ser filtro."""
+    pro porquê de ser filtro.
+
+    `limite`: override de `RESULTS_LIMIT` (default 8) — usado pra busca
+    suplementar interna (ver `rag_tools.buscar_conhecimento`), que não
+    precisa do top-8 inteiro."""
     from cbrag import qdrant_store  # import local: qdrant_store importa este módulo
 
     peso_bm25 = qdrant_store.PESO_BM25_CHAT if qdrant_store.MODO_CHAT == "hibrido" else None
@@ -332,6 +337,7 @@ def buscar_resultados(
     return qdrant_store.buscar(
         pergunta,
         modo=qdrant_store.MODO_CHAT,
+        limite=limite or RESULTS_LIMIT,
         peso_bm25=peso_bm25,
         max_por_arquivo=max_por_arquivo,
         data_ordinal_min=ordinal_min,

@@ -22,6 +22,7 @@ from cbrag.dados_financeiros import (
 )
 from cbrag.documentos_recentes import CATEGORIAS, listar_documentos_recentes, resumo_cobertura_da_base
 from cbrag.knowledge_config import buscar_contexto
+from cbrag.texto import normalizar
 from cbrag.planilha_resultados import ASSUNTOS as ASSUNTOS_INDICADORES
 from cbrag.planilha_resultados import contexto_indicadores
 
@@ -223,6 +224,38 @@ def consultar_cobertura_da_base(quantidade: int = 10) -> str:
     return resumo_cobertura_da_base(quantidade=quantidade)
 
 
+# Doc. 20 (fornecedores essenciais) e doc. 9 (credores) da Petição Inicial:
+# a linha de tabela só tem semântica pareada com o cabeçalho da coluna, que
+# fica num chunk separado — consulta em linguagem natural nunca acha o
+# anexo (ver docstring de `buscar_conhecimento`). Reproduzido em produção
+# (2026-09-27): o LLM não reformulava sozinho na primeira tentativa e
+# inventava desculpa técnica ("base não permite extração de lista
+# tabular") em vez de tentar de novo — por isso a garantia é aqui, não só
+# na docstring.
+_CONSULTAS_ANEXO_ESSENCIAL = {
+    "fornecedor": "Fornecedor CNPJ Nome do fornecedor Classificacao Essencial",
+    "credor": "Devedor Classificacao Credor Extraconcursal",
+}
+
+
+def _buscar_anexo_essencial_se_pedido(
+    consulta: str, meses_recentes: int | None, ja_vistos: list[str]
+) -> list[str]:
+    normalizada = normalizar(consulta)
+    if "essencia" not in normalizada:  # radical: casa "essencial" e "essenciais"
+        return []
+    vistos = set(ja_vistos)
+    extras: list[str] = []
+    for termo, consulta_tabular in _CONSULTAS_ANEXO_ESSENCIAL.items():
+        if termo not in normalizada:
+            continue
+        for chunk in buscar_contexto(consulta_tabular, meses_recentes=meses_recentes, limite=5):
+            if chunk not in vistos:
+                vistos.add(chunk)
+                extras.append(chunk)
+    return extras
+
+
 @tool("buscar_conhecimento")
 def buscar_conhecimento(consulta: str, meses_recentes: int | None = None) -> str:
     """Busca trechos relevantes na base de conhecimento institucional da
@@ -284,15 +317,15 @@ def buscar_conhecimento(consulta: str, meses_recentes: int | None = None) -> str
     credores essenciais") traz o corpo narrativo (que fala em "contrato
     essencial" em tese, sem nomear ninguém) e NUNCA o anexo, porque o chunk
     de linha de tabela (ex. "GOOGLE CLOUD ... Essencial") só tem semântica
-    no cabeçalho da tabela, que fica em chunk separado. Se a primeira busca
-    responder só em tese (sem nome de empresa/pessoa), refaça a busca
-    IMITANDO o formato da tabela em vez da pergunta do usuário: cabeçalho
-    de coluna + um nome de exemplo plausível do setor, ex. "Fornecedor CNPJ
-    Nome do fornecedor Classificação Essencial" pra fornecedor, "Devedor
-    Classificação Credor Extraconcursal" pra credor. Nunca conclua "a base
-    não lista nominalmente" só porque a primeira busca (linguagem natural)
-    não achou — essa forma de busca não é capaz de achar o anexo mesmo
-    quando ele existe.
+    no cabeçalho da tabela, que fica em chunk separado. **Isso já é
+    garantido pelo código** (a tool detecta "fornecedor"/"credor" +
+    "essencial" na consulta e injeta a busca tabular sozinha, sem depender
+    de reformulação) — nunca conclua "a base não lista nominalmente"; se a
+    resposta ainda assim vier só em tese, é porque a pergunta não usou
+    essas palavras, então refaça a busca IMITANDO o formato da tabela:
+    cabeçalho de coluna + um nome de exemplo plausível do setor, ex.
+    "Fornecedor CNPJ Nome do fornecedor Classificação Essencial" pra
+    fornecedor, "Devedor Classificação Credor Extraconcursal" pra credor.
 
     `meses_recentes`: corta candidato mais velho que N meses ANTES de
     ranquear — não é peso, é filtro (documento fora da janela nem entra na
@@ -305,6 +338,7 @@ def buscar_conhecimento(consulta: str, meses_recentes: int | None = None) -> str
     fato histórico específico não deve ser cortada por data), só como
     refinamento depois que a busca genérica trouxer algo desatualizado."""
     chunks = buscar_contexto(consulta, meses_recentes=meses_recentes)
+    chunks += _buscar_anexo_essencial_se_pedido(consulta, meses_recentes, ja_vistos=chunks)
     if not chunks:
         return "Nada relevante encontrado na base de conhecimento pra essa pergunta."
     return "\n\n---\n\n".join(chunks)

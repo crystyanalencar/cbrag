@@ -88,6 +88,18 @@ Credor Extraconcursal BANCO BRADESCO") devolve quase só chunks do Doc. 20/Doc. 
 Ou seja, o dado está indexado; falta contexto no chunk e sobra concorrência
 no top-k (par CVM × Central duplicado ocupa 2 slots por documento).
 
+**A reformulação virou garantia de código, não só instrução de docstring**
+(`rag_tools._buscar_anexo_essencial_se_pedido`). Motivo: reproduzido em
+produção (2026-09-27) que o LLM, na primeira tentativa, não reformulava
+sozinho pra imitar a tabela e em vez disso **inventava uma desculpa
+técnica** ("minha base não permite extração automatizada de listas
+tabulares em anexos") — variante do mesmo padrão de fabricação de
+desculpa institucional já visto com "sigilo" (`agente-e-chat.md` § Prompt
+não é garantia). `buscar_conhecimento` detecta o radical "essencia" +
+"fornecedor"/"credor" na consulta (qualquer forma: singular, plural) e
+injeta a busca tabular sozinho, sem depender de o LLM notar que a primeira
+resposta veio só em tese.
+
 Como diagnosticar: `eventos.jsonl` do chat grava só ~1 chunk por resultado de
 tool, então não mostra o top-k. Rodar `kc.buscar_resultados(consulta)` dentro
 do container (`/app/.venv/bin/python`) e ler `metadata` de cada resultado.
