@@ -27,6 +27,22 @@
     --serif: "Source Serif 4", Georgia, serif;
     --sans: "Inter", system-ui, sans-serif;
   }
+  /* "Sistema" (sem escolha explícita): segue o SO. Sem [data-theme], só
+     essa media query decide; [data-theme="dark"] abaixo repete os mesmos
+     valores pra vencer quando o usuário escolhe explicitamente, mesmo com
+     o SO no modo claro. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1416;
+      --panel: #161d20;
+      --hairline: #262e31;
+      --text: #eef1f2;
+      --muted: #9aa7ab;
+      --navy: #6f9bff;
+      --navy-dark: #a9c6ff;
+      --navy-mid: #9dbdff;
+    }
+  }
   :root[data-theme="dark"] {
     --bg: #0f1416;
     --panel: #161d20;
@@ -34,6 +50,7 @@
     --text: #eef1f2;
     --muted: #9aa7ab;
     --navy: #6f9bff;
+    --navy-dark: #a9c6ff;
     --navy-mid: #9dbdff;
   }
   * { box-sizing: border-box; }
@@ -62,6 +79,7 @@
     color: var(--navy);
     letter-spacing: 0.01em;
   }
+  nav { display: flex; align-items: center; }
   nav a {
     color: var(--muted);
     text-decoration: none;
@@ -182,18 +200,67 @@
     justify-content: space-between;
   }
   .theme-toggle {
+    position: relative;
     background: none;
-    border: 1px solid var(--hairline);
+    border: none;
     color: var(--muted);
-    border-radius: 999px;
-    width: 2rem;
-    height: 2rem;
-    font-size: 0.95rem;
+    border-radius: 0.4rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     margin-left: 1.25rem;
-    line-height: 1;
   }
-  .theme-toggle:hover { border-color: var(--navy); color: var(--navy); }
+  .theme-toggle:hover { color: var(--navy); background: var(--hairline); }
+  .theme-toggle svg {
+    position: absolute;
+    width: 1.15rem;
+    height: 1.15rem;
+    transition: transform 0.3s ease, opacity 0.2s ease;
+  }
+  .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+  .theme-toggle .icon-moon { opacity: 0; transform: rotate(90deg) scale(0); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { opacity: 0; transform: rotate(-90deg) scale(0); }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+  }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(-90deg) scale(0); }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+  .theme-picker { position: relative; display: inline-flex; }
+  .theme-menu {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: 0;
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.15);
+    padding: 0.3rem;
+    min-width: 8.5rem;
+    z-index: 50;
+  }
+  .theme-menu[hidden] { display: none; }
+  .theme-menu button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--text);
+    padding: 0.45rem 0.6rem;
+    border-radius: 0.35rem;
+    cursor: pointer;
+  }
+  .theme-menu button:hover { background: var(--hairline); }
+  .theme-menu button[aria-checked="true"] { color: var(--navy); font-weight: 500; }
+  .theme-menu button .check { visibility: hidden; }
+  .theme-menu button[aria-checked="true"] .check { visibility: visible; }
 
   .chat-fab {
     position: fixed;
@@ -342,30 +409,64 @@
     <nav>
       <a href="/chat/">Chat</a>
       <a href="/docs">Docs</a>
-      <button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema claro/escuro" title="Alternar tema">🌙</button>
+      <span class="theme-picker">
+        <button class="theme-toggle" id="theme-toggle" aria-label="Alternar tema" aria-haspopup="true" aria-expanded="false" title="Tema">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+        </button>
+        <div class="theme-menu" id="theme-menu" role="menu" hidden>
+          <button type="button" role="menuitemradio" data-theme-choice="light"><span>Claro</span><span class="check">✓</span></button>
+          <button type="button" role="menuitemradio" data-theme-choice="dark"><span>Escuro</span><span class="check">✓</span></button>
+          <button type="button" role="menuitemradio" data-theme-choice="system"><span>Sistema</span><span class="check">✓</span></button>
+        </div>
+      </span>
     </nav>
   </div>
 </header>
 <script>
   (function () {
     try {
-      var saved = localStorage.getItem("cbrag-theme");
-      if (saved) document.documentElement.setAttribute("data-theme", saved);
+      // Mesma chave que o Chainlit usa em /chat/ (localStorage["vite-ui-theme"],
+      // next-themes) — mesma origem, então o valor já é compartilhado; só
+      // precisava ser a mesma chave dos dois lados. "system" é valor válido
+      // lá, mas aqui só entendemos light/dark explícito.
+      var saved = localStorage.getItem("vite-ui-theme");
+      if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
     } catch (e) {}
     document.addEventListener("DOMContentLoaded", function () {
       var btn = document.getElementById("theme-toggle");
+      var menu = document.getElementById("theme-menu");
       var root = document.documentElement;
-      function sync() {
-        var isDark = root.getAttribute("data-theme") === "dark";
-        btn.textContent = isDark ? "☀️" : "🌙";
+
+      function temaSalvo() {
+        try { return localStorage.getItem("vite-ui-theme") || "system"; } catch (e) { return "system"; }
       }
-      btn.addEventListener("click", function () {
-        var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-        root.setAttribute("data-theme", next);
-        try { localStorage.setItem("cbrag-theme", next); } catch (e) {}
-        sync();
+      function aplicarTema(pref) {
+        if (pref === "light" || pref === "dark") root.setAttribute("data-theme", pref);
+        else root.removeAttribute("data-theme");
+        menu.querySelectorAll("button[data-theme-choice]").forEach(function (b) {
+          b.setAttribute("aria-checked", String(b.dataset.themeChoice === pref));
+        });
+      }
+      function abrirMenu() { menu.hidden = false; btn.setAttribute("aria-expanded", "true"); }
+      function fecharMenu() { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+
+      aplicarTema(temaSalvo());
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (menu.hidden) abrirMenu(); else fecharMenu();
       });
-      sync();
+      menu.querySelectorAll("button[data-theme-choice]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var pref = b.dataset.themeChoice;
+          try { localStorage.setItem("vite-ui-theme", pref); } catch (e) {}
+          aplicarTema(pref);
+          fecharMenu();
+        });
+      });
+      document.addEventListener("click", function (e) {
+        if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) fecharMenu();
+      });
 
       if (location.protocol === "file:") {
         document.querySelectorAll('a[href="/chat/"]').forEach(function (a) {
