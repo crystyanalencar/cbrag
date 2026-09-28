@@ -75,13 +75,27 @@ erro, não o elimina. O que precisa valer sempre vai pro código.
 
 ## Provider de LLM
 
-Geração via OpenRouter com **preset** (`openrouter/@preset/free-tier-first`),
+Geração via OpenRouter com **preset** (`openrouter/@preset/free-tier-first`,
+nome antigo — configuração não é mais rotação ampla de modelo grátis),
 controlado no painel — modelo, ordem, reasoning e limite de gasto ficam do
-lado do provider, não no código. Consequência: o modelo muda por chamada;
+lado do provider, não no código. Cadeia fixa de 3 modelos (fallback por
+modelo, `allow_fallbacks: true`), não mais um preset genérico de free-tier:
+**Gemini 3.1 Flash Lite** (BYOK direto no Google — `provider.order:
+["google-ai-studio", "google-vertex"]` pra esse modelo; free tier do Google
+sem billing habilitado nunca cobra, só erra 429 até resetar a cota) →
+**GLM 5.3 Flash** (`provider.order: ["inference-net"]`, mais barato no
+output entre os provedores do modelo) → **Qwen 3.7 Flash** (`alibaba`,
+único provedor do modelo). Trocado do preset genérico original porque a
+rotação entre *qualquer* modelo grátis dava qualidade inconsistente de
+resposta a cada chamada — mesma pergunta, respostas de qualidade muito
+diferente dependendo de qual modelo grátis calhou de atender.
+
+Consequência que continua valendo: o modelo ainda pode mudar por chamada
+(fallback em cascata se o primeiro falhar/estourar cota), então
 comportamento errático (identidade genérica, troca de idioma, loop,
 conversa longa ignorando resultado de tool) é tratado com backstory,
-`max_iter` e tools determinísticas, não trocando modelo. `_kickoff()` só
-captura exceção pra não derrubar o chat — sem fallback nem retry manual
+`max_iter` e tools determinísticas, não assumindo um modelo fixo. `_kickoff()`
+só captura exceção pra não derrubar o chat — sem fallback nem retry manual
 entre providers, isso é papel do preset do OpenRouter.
 
 ## Desempenho
