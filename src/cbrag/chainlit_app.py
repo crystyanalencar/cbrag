@@ -17,15 +17,23 @@ por turno — por isso finaliza no fim da sessão do Chainlit
 
 Rodar: `uv run chainlit run src/cbrag/chainlit_app.py`
 """
+import asyncio
+import json
 import logging
+import threading
 import time
 
 import chainlit as cl
 from chainlit.config import config as _cl_config
 from chainlit.context import init_ws_context as _init_ws_context
 from chainlit.message import Message as _ClMessage
+from chainlit.server import app as _cl_app
 from chainlit.server import sio as _sio
 from chainlit.session import WebsocketSession as _WebsocketSession
+from starlette.concurrency import run_in_threadpool
+from starlette.requests import Request as _Request
+from starlette.responses import JSONResponse as _JSONResponse
+from starlette.responses import StreamingResponse as _StreamingResponse
 
 from cbrag import local_tracing
 from cbrag.main import TURNOS_CANCELADOS, CbragFlow
@@ -149,6 +157,102 @@ async def encerrar():
     flow: CbragFlow | None = cl.user_session.get(_FLOW)
     if flow is not None:
         flow.finalize_session_traces()
+
+
+_WIDGET_MENSAGEM_MAX = 2000
+_WIDGET_SESSAO_TTL_S = 2 * 60 * 60
+_widget_sessoes: dict[str, tuple[CbragFlow, float]] = {}
+_widget_lock = threading.Lock()
+
+
+def _widget_limpar_sessoes_expiradas(agora: float) -> None:
+    expiradas = [
+        sid for sid, (_, ultimo_uso) in _widget_sessoes.items()
+        if agora - ultimo_uso > _WIDGET_SESSAO_TTL_S
+    ]
+    for sid in expiradas:
+        flow, _ = _widget_sessoes.pop(sid)
+        flow.finalize_session_traces()
+
+
+_WIDGET_HEARTBEAT_S = 10.0
+
+
+async def _widget_chat(request: _Request):
+    """Endpoint enxuto pro widget de chat da home (`site/index.html`) — sem
+    Chainlit UI em volta, reusa `CbragFlow.handle_turn` direto, a mesma API
+    conversacional oficial do CrewAI que `responder()` acima usa. Sessão
+    identificada pelo `session_id` gerado no navegador (não é a sessão
+    WebSocket do Chainlit), guardada em memória com TTL — sem endpoint de
+    encerramento explícito (widget não avisa quando a aba fecha), a limpeza
+    é preguiçosa: roda a cada chamada.
+
+    Resposta é SSE (`text/event-stream`), não JSON puro: um turno real leva
+    25-40s (RAG + LLM) e nesse tempo o POST fica mudo — sem o heartbeat do
+    WebSocket que o Chainlit normal usa (ver `responder()`/`cl.make_async`
+    acima), rede móvel/proxy intermediário mata a conexão por inatividade
+    achando que caiu, e o navegador nunca recebe a resposta que o servidor
+    processou até o fim. Aqui manda um comentário SSE (`: ping`) a cada
+    `_WIDGET_HEARTBEAT_S` enquanto `flow.handle_turn` roda em thread, e só a
+    resposta final vem como `data: {...}`."""
+    corpo = await request.json()
+    mensagem = str(corpo.get("mensagem") or "").strip()
+    session_id = str(corpo.get("session_id") or "").strip()
+    if not mensagem or not session_id:
+        return _JSONResponse({"erro": "mensagem e session_id são obrigatórios"}, status_code=400)
+    if len(mensagem) > _WIDGET_MENSAGEM_MAX:
+        return _JSONResponse({"erro": "mensagem longa demais"}, status_code=400)
+
+    agora = time.monotonic()
+    with _widget_lock:
+        _widget_limpar_sessoes_expiradas(agora)
+        flow, _ = _widget_sessoes.get(session_id, (None, 0.0))
+        if flow is None:
+            flow = CbragFlow()
+        _widget_sessoes[session_id] = (flow, agora)
+
+    async def eventos():
+        local_tracing.sessao_atual.set(session_id)
+        inicio = time.monotonic()
+        tarefa = asyncio.ensure_future(
+            run_in_threadpool(flow.handle_turn, mensagem, session_id=session_id)
+        )
+        resposta = None
+        while resposta is None:
+            try:
+                resposta = await asyncio.wait_for(
+                    asyncio.shield(tarefa), timeout=_WIDGET_HEARTBEAT_S
+                )
+            except TimeoutError:
+                yield b": ping\n\n"
+            except Exception:
+                logger.exception("Erro no widget de chat (session_id=%s)", session_id)
+                resposta = (
+                    "Não consegui responder agora — deu um erro inesperado no "
+                    "meu lado. Tenta de novo, ou reformula a pergunta."
+                )
+        local_tracing.gravar(
+            {
+                "tipo": "turno",
+                "pergunta": mensagem,
+                "resposta": resposta,
+                "duracao_s": round(time.monotonic() - inicio, 1),
+                "interrompido": False,
+            }
+        )
+        payload = json.dumps({"resposta": resposta}, ensure_ascii=False)
+        yield f"data: {payload}\n\n".encode()
+
+    return _StreamingResponse(
+        eventos(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+_cl_app.add_api_route(
+    f"{_cl_config.run.root_path}/api/chat", _widget_chat, methods=["POST"]
+)
 
 
 @_sio.on("stop")

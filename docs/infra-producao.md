@@ -53,9 +53,11 @@ de sistema em `/var/lib/docker/volumes`).
 
 O `Dockerfile` cria o usuário do container com uid 1000. Nessa VM o usuário
 `ubuntu` é uid 1001, então pasta criada por ele (`cvm_estruturado`,
-`knowledge`, `cdx`) ou pelo Docker como `root` (`logs`, `fastembed_cache`)
+`knowledge`, `cdx`, `logs`) ou pelo Docker como `root` (`fastembed_cache`)
 não é gravável: `PermissionError` no primeiro turno de chat ou na ingestão.
-Fix: `chown -R 1000:1000`. Teste HTTP simples não pega isso, só um turno real.
+Fix: `chown -R 1000:1000`. Teste HTTP simples não pega isso, só um turno real
+(inclusive o endpoint `/api/chat` do widget — ele também escreve em
+`data/logs/eventos.jsonl` via `local_tracing`).
 
 `qdrant/.lock` de execução embedded antiga (dono root) precisa ser removido
 manualmente; o Qdrant recria.

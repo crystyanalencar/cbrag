@@ -115,6 +115,40 @@
   .step p { margin: 0 0 0.75rem; color: var(--text); }
   .step p:last-child { margin-bottom: 0; }
   .step .aside { font-size: 0.88rem; color: var(--muted); border-left: 2px solid var(--hairline); padding-left: 0.85rem; }
+  .flow { margin: 1.25rem 0; }
+  .flow-q {
+    display: inline-block;
+    font-family: var(--serif);
+    font-size: 0.95rem;
+    color: var(--navy-dark);
+    background: var(--panel);
+    border: 1px solid var(--navy);
+    border-radius: 0.5rem;
+    padding: 0.6rem 1.1rem;
+  }
+  .flow-arrow {
+    color: var(--muted);
+    font-size: 1.1rem;
+    padding: 0.35rem 0 0.35rem 1.35rem;
+  }
+  .flow-paths {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.85rem;
+  }
+  .flow-path {
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-top: 3px solid var(--navy-mid);
+    border-radius: 0.5rem;
+    padding: 0.9rem 1rem;
+  }
+  .flow-path .emoji { font-size: 1.3rem; display: block; margin-bottom: 0.35rem; }
+  .flow-path strong { display: block; font-size: 0.88rem; color: var(--navy-dark); margin-bottom: 0.3rem; }
+  .flow-path span { font-size: 0.82rem; color: var(--muted); }
+  @media (max-width: 32rem) {
+    .flow-paths { grid-template-columns: 1fr; }
+  }
   a.inline { color: var(--navy); }
   code {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -228,6 +262,27 @@
       respostas ruins pra dado que muda de fato: "quem é o CEO hoje" e "qual foi o EBITDA do
       trimestre" não são perguntas de busca, são perguntas de <em>estado atual</em> e de
       <em>número exato</em>. O agente evoluiu pra decidir entre três mecanismos por pergunta:</p>
+      <div class="flow">
+        <span class="flow-q">"Quem é o CEO?" / "Qual foi o EBITDA?" / "Qual a estratégia?"</span>
+        <div class="flow-arrow">↓ o agente decide qual caminho responde melhor</div>
+        <div class="flow-paths">
+          <div class="flow-path">
+            <span class="emoji">🗂️</span>
+            <strong>Estado atual</strong>
+            <span>Quem está no cargo hoje — dataset da CVM, sem busca.</span>
+          </div>
+          <div class="flow-path">
+            <span class="emoji">📊</span>
+            <strong>Financeiro</strong>
+            <span>Número de resultado — DRE estruturada da CVM, sem PDF.</span>
+          </div>
+          <div class="flow-path">
+            <span class="emoji">🔎</span>
+            <strong>Narrativo</strong>
+            <span>Estratégia, histórico — busca sobre o corpus de documentos.</span>
+          </div>
+        </div>
+      </div>
       <p class="aside">Composição de conselho/diretoria e resultado financeiro vêm de dataset
       estruturado da CVM (FRE e DRE/ITR/DFP) via tool determinística — nunca de busca por
       similaridade. Só estratégia, histórico e fatos relevantes vão pra busca híbrida sobre o
