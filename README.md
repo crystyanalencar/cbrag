@@ -88,7 +88,7 @@ onde acertar a fonte importa mais que "parecer relevante".
 | Categoria | Tecnologia |
 |---|---|
 | Orquestração de agente | CrewAI (Flow conversacional + `Agent.kickoff()` com tool-calling) |
-| Geração (LLM) | OpenRouter — modelos configurados no painel, sem mudar código (hoje: NVIDIA Nemotron 3.5 Lightning, Google Gemma 4 26B A4B, Google Gemini 3.1 Flash Lite) |
+| Geração (LLM) | OpenRouter — modelos configurados no painel, sem mudar código (hoje: Google Gemini 3.1 Flash Lite via BYOK, com fallback pra Z.ai GLM 5.3 Flash e Qwen 3.7 Flash) |
 | Embedding denso | Qwen3 Embedding 8B via OpenRouter |
 | Retrieval | Qdrant — vetor denso + esparso BM25 (fastembed, stemmer PT) por chunk, busca híbrida ponderada (RRF) |
 | Dados estruturados | Datasets abertos da CVM (FRE, ITR/DFP) — DRE trimestral e composição de conselho como tools determinísticas |
