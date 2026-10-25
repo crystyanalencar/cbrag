@@ -40,41 +40,44 @@ coleta e indexa o dado (roda 1x/dia, sem LLM até o embedding), o outro
 responde ao usuário (roda por turno de chat, decide sozinho qual tool
 chamar).
 
+**Ingestão** (`IngestFlow`, uma vez por dia, às 8h de Brasília). Cada passo
+é Python puro, sem LLM; só o último chama a API de embedding.
+
+```mermaid
+flowchart TD
+    W["coletar_wayback<br/>site institucional"] --> C["coletar_cvm<br/>documentos IPE"]
+    C --> R["coletar_ri_central<br/>Central de Downloads do RI"]
+    R --> D["coletar_dre_estruturada<br/>ITR/DFP da CVM"]
+    D --> P["extrair_planilha<br/>Planilha de Resultados"]
+    P --> X["extrair_pdfs"]
+    X --> K["preparar_corpus<br/>texto + metadado por arquivo"]
+    K --> E["embutir_conhecimento<br/>só o que mudou (hash por arquivo, diff por chunk)"]
+    E --> Q[("Qdrant<br/>denso + BM25")]
+    D --> J[("data/cvm_estruturado/*.json<br/>DRE, conselho, indicadores")]
+    P --> J
 ```
-IngestFlow (agendado, systemd timer, 8h Brasília)
-─────────────────────────────────────────────────
-  coletar_wayback ──▶ coletar_cvm ──▶ coletar_dre_estruturada
-        │ (não-bloqueante:              │
-        │  falha não trava o resto)     ▼
-        │                          extrair_pdfs
-        │                                │
-        └────────────────────────────────┼──▶ preparar_knowledge
-                                          │         │
-                                          │         ▼
-                                          │   embutir_conhecimento
-                                          │   (Qdrant: denso + BM25,
-                                          │    incremental via manifesto
-                                          │    hash SHA-256 por arquivo)
-                                          ▼
-                                data/cvm_estruturado/*.json
-                                (DRE, conselho — sem passar por LLM)
 
+`coletar_wayback` e `extrair_planilha` não bloqueiam: se falham, o resto do
+pipeline segue.
 
-CbragFlow (conversacional, 1 por sessão de chat)
-─────────────────────────────────────────────────
-  usuário pergunta
-        │
-        ▼
-  Agent (OpenRouter, tool-calling) ──▶ decide qual tool chamar
-        │
-        ├─▶ consultar_resultado_financeiro     (DRE estruturada CVM)
-        ├─▶ consultar_serie_historica_resultado (DRE estruturada CVM)
-        ├─▶ consultar_composicao_conselho       (FRE estruturado CVM)
-        ├─▶ consultar_documentos_recentes       (metadado + data_ordinal)
-        └─▶ buscar_conhecimento                 (Qdrant: híbrido BM25+denso)
-        │
-        ▼
-  resposta (Chainlit, streaming) + evento gravado em data/logs/eventos.jsonl
+**Chat** (`CbragFlow`, um por sessão). O agente decide qual tool chamar a cada
+pergunta.
+
+```mermaid
+flowchart TD
+    U["pergunta"] --> A["Agent<br/>OpenRouter, tool-calling"]
+    A --> T1["consultar_resultado_financeiro<br/>consultar_serie_historica_resultado"]
+    A --> T2["consultar_composicao_conselho"]
+    A --> T3["consultar_indicadores_operacionais"]
+    A --> T4["consultar_documentos_recentes<br/>consultar_cobertura_da_base"]
+    A --> T5["buscar_conhecimento"]
+    T1 --> J[("JSON estruturado<br/>sem LLM nem embedding")]
+    T2 --> J
+    T3 --> J
+    T4 --> M[("metadado do corpus<br/>ordenado por data")]
+    T4 --> J
+    T5 --> Q[("Qdrant<br/>busca híbrida BM25 + denso")]
+    A --> O["resposta (Chainlit, streaming)<br/>+ evento em data/logs/eventos.jsonl"]
 ```
 
 A decisão de separar "pergunta de estado atual/número exato" (tools
