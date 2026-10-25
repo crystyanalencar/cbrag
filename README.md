@@ -144,25 +144,32 @@ o dado não é omitido, só não é dramatizado.
 
 ## Estrutura de diretórios
 
-```
-src/cbrag/
-├── main.py              # CbragFlow — Flow conversacional, agent, tool-calling
-├── ingest_flow.py        # IngestFlow — pipeline de coleta + indexação
-├── chainlit_app.py       # interface web (Chainlit)
-├── qdrant_store.py        # índice Qdrant (denso + BM25, busca híbrida)
-├── knowledge_config.py    # caminhos, chunking, manifesto incremental
-├── dados_financeiros.py   # tool: DRE estruturada CVM
-├── composicao_conselho.py # tool: conselho/diretoria (FRE)
-├── documentos_recentes.py # tool: ordenação por recência (data_ordinal)
-├── local_tracing.py       # observabilidade local (JSONL)
-└── tools/rag_tools.py      # wrappers @tool expostos ao agent
+**`src/cbrag/`**
 
-scripts/                   # coleta (Wayback, CVM), extração de PDF,
-                            # preparo do corpus, avaliação de retrieval
-tests/golden_retrieval.json # golden set (pergunta → documento esperado)
-site/                      # landing + docs estáticos (servidos pelo Caddy)
-data/                      # corpus e índice — gerado, fora do git
-```
+| Módulo | Papel |
+|---|---|
+| `main.py` | `CbragFlow`: Flow conversacional, agent e tool-calling |
+| `prompts.py` | role, goal e backstory do agent |
+| `ingest_flow.py` | `IngestFlow`: pipeline de coleta e indexação |
+| `chainlit_app.py` | interface web (Chainlit) e widget de chat da landing |
+| `qdrant_store.py` | índice Qdrant: denso + BM25, busca híbrida, indexação incremental |
+| `knowledge_config.py` | caminhos, chunking (inclusive o do FRE) e manifesto incremental |
+| `dados_financeiros.py` | tool: DRE estruturada da CVM |
+| `composicao_conselho.py` | tool: conselho e diretoria (FRE) |
+| `planilha_resultados.py` | tool: indicadores operacionais da Planilha de Resultados |
+| `documentos_recentes.py` | tool: documentos ordenados por data (`data_ordinal`) |
+| `texto.py` | normalização de texto compartilhada |
+| `local_tracing.py` | observabilidade local (JSONL) |
+| `tools/rag_tools.py` | wrappers `@tool` expostos ao agent |
+
+**Demais pastas**
+
+| Pasta | Conteúdo |
+|---|---|
+| `scripts/` | coleta (Wayback, CVM, Central de Downloads), extração de PDF e da planilha, preparo do corpus, avaliação de retrieval e testes do FRE e da indexação |
+| `tests/golden_retrieval.json` | golden set (pergunta → documento esperado) |
+| `site/` | landing e docs estáticos (servidos pelo Caddy) |
+| `data/` | corpus e índice, gerados pela ingestão e fora do git, exceto `data/cvm_estruturado/` e `data/cdx/` |
 
 ## Instalação e configuração
 
