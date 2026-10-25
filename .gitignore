@@ -1,0 +1,38 @@
+.env
+__pycache__/
+lib/
+.DS_Store
+
+# config MCP local (por máquina), não do projeto
+.mcp.json
+
+# corpus baixado pelos scripts (crawl_wayback.py, baixar_cvm.py) — reproduzível, não versionar
+data/corpus/
+data/pdfs/
+data/cvm/
+data/ri_central/
+data/corpus_pdf/
+data/knowledge/
+
+# índice Qdrant (embedded) + manifesto — binário, não versionar no git; pra
+# portar pra outra máquina sem reprocessar (~2h de embedding), copiar a
+# pasta na mão
+data/knowledge_storage/
+
+# dado do Qdrant servidor (docker-compose: service qdrant) — binário
+data/qdrant_server/
+
+# log local de eventos do chat (tool calls, respostas) — ver local_tracing.py
+data/logs/
+
+# modelo BM25 do fastembed baixado em runtime (docker-compose: FASTEMBED_CACHE_PATH)
+data/fastembed_cache/
+
+# pasta de sessão/upload que o Chainlit cria em runtime — lixo por sessão
+.files/
+
+# gerados pela ingestão a partir de data/ri_central/_planilhas (extrair_planilha_resultados.py);
+# versionar deixaria a árvore suja a cada ingestão
+data/cvm_estruturado/planilha_resultados.json
+data/cvm_estruturado/planilha_revisoes.json
+data/cvm_estruturado/*.tmp

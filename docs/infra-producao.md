@@ -1,0 +1,52 @@
+# Infra de produção
+
+Como a produção é montada, no nível do que está no repo. Config de máquina,
+rede e postura de segurança ficam fora dele: quem opera a própria cópia
+decide a própria segurança.
+
+## Topologia
+
+Cloudflare (proxy, DNS) → VM ARM64 sem GPU → Caddy (reverse proxy) →
+containers via `docker-compose.yml`: `chat` (Chainlit), `qdrant` (servidor,
+sem porta pública) e `ingest` (profile separado). Rotas: `/` landing e
+`/docs` (estáticos servidos pelo Caddy a partir de `site/`), `/chat` app.
+
+- Chainlit atrás de sub-path: `CHAINLIT_ROOT_PATH=/chat` (suporte oficial,
+  `APIRouter(prefix=root_path)`), lido pelo compose com default vazio.
+- Caddy precisa de hostname explícito no site block pro `tls internal`
+  emitir certificado (`:443` sozinho falha o handshake).
+
+## Onde mora o índice
+
+O Qdrant é servidor (container `qdrant` do compose, sem porta pública) e é a
+**única** fonte da verdade do índice: corpus embedado com Qwen3 (4096
+dimensões). A ingestão roda no mesmo host, agendada, incremental por
+manifesto. Sem `QDRANT_URL`, `qdrant_store.cliente()` cai no modo embedded e
+abre `data/knowledge_storage/qdrant`, um índice local que não é o de
+produção. Foi isso que fez um embedding "local" falhar (`could not broadcast
+(4096,) into (768,)`), e por isso `indexar_arquivo` e `reindexar_bm25`
+exigem `QDRANT_URL` (`exigir_servidor`; testes em memória liberam com
+`CBRAG_PERMITIR_QDRANT_LOCAL=1`). Fora do servidor dá pra preparar e
+conferir o texto (`extrair_texto_pdfs`, `preparar_knowledge`, contagem de
+chunks/custo), não embedar.
+
+**`chat` e `ingest` são imagens separadas** (`cbrag-chat` e `cbrag-ingest`,
+ambas `build: .`). `docker compose up -d --build chat` reconstrói só a do
+chat; a ingestão agendada não reconstrói, então continua rodando o código
+velho até alguém rodar `docker compose --profile ingest build ingest`. Todo
+deploy que mexe em `scripts/` ou no pipeline precisa dos dois builds.
+
+## Permissões de volume
+
+`docker-compose.yml` usa bind mount relativo dentro do checkout, não volume
+nomeado. O `Dockerfile` cria o usuário do container com uid 1000: pasta de
+`data/` criada no host por outro uid, ou pelo Docker como `root`, não é
+gravável e dá `PermissionError` no primeiro turno de chat ou na ingestão
+(fix: `chown -R 1000:1000`). Teste HTTP simples não pega isso, só um turno
+real (inclusive o endpoint `/api/chat` do widget, que também escreve em
+`data/logs/eventos.jsonl` via `local_tracing`).
+
+## Ambiente de teste do Playwright headed
+
+Pra o caminho headed do Akamai (`ingestao.md`): `xvfb` + Node ≥20 +
+`npx playwright install chromium`.
