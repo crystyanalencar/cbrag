@@ -36,6 +36,25 @@ chat; a ingestão agendada não reconstrói, então continua rodando o código
 velho até alguém rodar `docker compose --profile ingest build ingest`. Todo
 deploy que mexe em `scripts/` ou no pipeline precisa dos dois builds.
 
+## Versões, prontidão e limites
+
+- **Versões fixas, sem `latest`.** A imagem do Qdrant e a do uv usada no
+  `Dockerfile` têm versão fixa. Atualizar o Qdrant migra o formato do storage
+  sem volta. Por isso a troca de versão é deliberada e nunca pode ir para
+  versão anterior à que já abriu o volume (conferir com `GET /` no
+  container antes de mudar a tag). Mantenha a versão do `qdrant-client` do
+  `uv.lock` compatível com a do servidor.
+- **Healthcheck por `/readyz`.** A imagem do Qdrant não traz `curl` nem
+  `wget`, então o teste faz a requisição HTTP pelo `/dev/tcp` do bash.
+  `chat` e `ingest` usam `depends_on: condition: service_healthy`, ou seja,
+  esperam o Qdrant responder e não apenas o processo subir.
+- **Limites de recurso nos três serviços.** Chat 2 CPU/2G, qdrant 1 CPU/1G,
+  ingest 1.5 CPU/3G. O limite do ingest existe para que a extração de um PDF
+  grande não esgote a memória do host e derrube o chat. O efeito colateral é
+  que, se um PDF passar do limite, o kernel mata o container inteiro (exit
+  137) e o run do dia aborta sem resumo. O try/except por arquivo não pega
+  esse caso.
+
 ## Permissões de volume
 
 `docker-compose.yml` usa bind mount relativo dentro do checkout, não volume

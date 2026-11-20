@@ -317,6 +317,43 @@ regimentos internos, termo de emissão de nota comercial. Falha recorrente:
 `Stream has ended unexpectedly` do pypdf em alguns PDFs (as duas petições
 iniciais da recuperação judicial, por exemplo).
 
+### Gravação atômica e quarentena
+
+Os coletores só baixam o que ainda não existe em disco (`destino.exists()`).
+Um arquivo gravado pela metade, portanto, nunca era baixado de novo e falhava
+na extração em todo run. Caso real: um PDF da Central com o fim zerado. Foi
+gravação interrompida, não download truncado, porque o urllib3 2.x já recusa
+corpo menor que o `Content-Length`. Dois mecanismos, em `cbrag/arquivos.py`:
+
+- **`gravar_atomico`**: grava em `<nome>.parcial`, faz `fsync` e depois
+  `os.replace`. O destino só passa a existir completo. Nenhum glob de
+  extração casa `.parcial`.
+- **Quarentena**: o PDF que falha na extração e **não tem `%%EOF` no último
+  KB** vai para `<pasta>/_quarentena/`, com uma linha em
+  `data/logs/quarentena.jsonl`. Como saiu da pasta, o coletor o baixa de
+  novo no próximo run.
+
+Decisões e porquês:
+
+- **O critério é o trailer, não o tipo da exceção.** O pypdf também levanta
+  `PdfReadError` para estrutura interna que não consegue ler (página ou
+  fonte malformada) em arquivo completo. Rebaixar esse arquivo traria os
+  mesmos bytes, então ele fica como falha comum. PDF protegido por senha
+  também fica como falha comum.
+- **O coletor desiste após `MAX_QUARENTENAS` (2).** A primeira quarentena
+  cobre a gravação interrompida. A segunda indica arquivo quebrado na
+  fonte, e sem esse limite ele seria baixado e quarentenado todo dia. O
+  contador fica em `_quarentena/<nome>.quarentenas` e os arquivos
+  abandonados aparecem como `*_desistidos` no estado do Flow. Para liberar um
+  novo download (por exemplo, quando a fonte corrigir o arquivo com o mesmo
+  nome), apague o contador.
+- **Extração bem-sucedida zera o contador e apaga a cópia quarentenada.**
+  Uma quarentena resolvida não pode somar com uma falha futura não
+  relacionada.
+- **Problema no contador ou no log não derruba a coleta.** Contador
+  ilegível conta como 0. Falha no registro depois do `move` vira aviso, já
+  que o arquivo não está mais na pasta de origem.
+
 ## Custo e agenda
 
 - Embedding denso: `qwen/qwen3-embedding-8b` via OpenRouter, dimensão 4096
