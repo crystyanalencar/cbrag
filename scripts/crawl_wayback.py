@@ -161,7 +161,7 @@ def baixar_pdfs(pdf_entries):
         salvos += 1
         time.sleep(0.3)
     print(f"PDFs: {salvos} salvos, {falhas} falharam, {desistidos} desistidos (quarentena repetida, ver data/logs/quarentena.jsonl)")
-    return {"pdfs_salvos": salvos, "pdfs_falhas": falhas}
+    return {"pdfs_salvos": salvos, "pdfs_falhas": falhas, "pdfs_desistidos": desistidos}
 
 
 def main() -> dict:

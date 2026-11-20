@@ -337,7 +337,7 @@ def main() -> dict:
         print(f"Índice RI-central: {mantidas} entrada(s) de arquivo em disco que a API não lista mais, mantida(s)")
     salvar_indice(indice)
     print(f"Total: {salvos} documentos salvos em {PDF_DIR}, {pulados} pulados (baixo valor), {falhas} falharam, {desistidos} desistidos (quarentena repetida, ver data/logs/quarentena.jsonl)")
-    return {"ri_central_salvos": salvos, "ri_central_pulados": pulados, "ri_central_falhas": falhas}
+    return {"ri_central_salvos": salvos, "ri_central_pulados": pulados, "ri_central_falhas": falhas, "ri_central_desistidos": desistidos}
 
 
 if __name__ == "__main__":

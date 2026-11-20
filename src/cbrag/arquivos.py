@@ -39,7 +39,11 @@ def gravar_atomico(destino: Path, dados: bytes) -> None:
             os.fsync(f.fileno())
         os.replace(temporario, destino)
     except BaseException:
-        temporario.unlink(missing_ok=True)
+        # Falha na limpeza não pode mascarar o erro original (disco cheio, EIO).
+        try:
+            temporario.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise
 
 
@@ -48,10 +52,12 @@ def _contador(destino: Path) -> Path:
 
 
 def quarentenas(destino: Path) -> int:
-    """Quantas vezes o arquivo de `destino` já foi pra quarentena."""
+    """Quantas vezes o arquivo de `destino` já foi pra quarentena. Contador
+    ausente, ilegível ou com conteúdo inválido conta como 0: um problema no
+    contador não pode derrubar a coleta."""
     try:
         return int(_contador(destino).read_text(encoding="utf-8").strip() or 0)
-    except (FileNotFoundError, ValueError):
+    except (OSError, ValueError):
         return 0
 
 
@@ -60,6 +66,19 @@ def registrar_quarentena(destino: Path) -> int:
     total = quarentenas(destino) + 1
     _contador(destino).write_text(str(total), encoding="utf-8")
     return total
+
+
+def limpar_quarentena(destino: Path) -> None:
+    """Remove o contador e a cópia quarentenada de `destino`. Chamado quando
+    o arquivo volta a ser extraído com sucesso: a quarentena anterior foi
+    resolvida pelo novo download e não deve contar para uma desistência
+    futura."""
+    pasta = destino.parent / QUARENTENA_SUBDIR
+    for resto in (_contador(destino), pasta / destino.name):
+        try:
+            resto.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def desistido(destino: Path) -> bool:

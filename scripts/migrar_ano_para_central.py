@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cbrag import knowledge_config as kc  # noqa: E402
+from cbrag.arquivos import limpar_quarentena  # noqa: E402
 from cbrag import qdrant_store as qs  # noqa: E402
 
 CVM_DIR = ROOT / "data/cvm"
@@ -66,6 +67,7 @@ def main(ano: int) -> None:
         (kc.KNOWLEDGE_DIR / nome).unlink(missing_ok=True)
         (CORPUS_PDF_DIR / f"{Path(nome).stem}.txt").unlink(missing_ok=True)
         (CVM_DIR / f"{Path(nome).stem}.pdf").unlink(missing_ok=True)
+        limpar_quarentena(CVM_DIR / f"{Path(nome).stem}.pdf")
 
     remover_do_manifesto(set(nomes))
     remover_da_metadata(set(nomes))

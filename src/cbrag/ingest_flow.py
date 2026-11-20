@@ -34,11 +34,14 @@ class IngestState(BaseModel):
     paginas_falhas: int = 0
     pdfs_salvos: int = 0
     pdfs_falhas: int = 0
+    pdfs_desistidos: int = 0
     cvm_salvos: int = 0
     cvm_falhas: int = 0
+    cvm_desistidos: int = 0
     ri_central_salvos: int = 0
     ri_central_pulados: int = 0
     ri_central_falhas: int = 0
+    ri_central_desistidos: int = 0
     dre_linhas: int = 0
     planilha_versoes: int = 0
     planilha_valores: int = 0

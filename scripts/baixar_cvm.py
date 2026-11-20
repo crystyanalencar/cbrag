@@ -109,7 +109,7 @@ def main() -> dict:
         time.sleep(0.2)
 
     print(f"Total: {salvos} documentos salvos em {PDF_DIR}, {falhas} falharam, {desistidos} desistidos (quarentena repetida, ver data/logs/quarentena.jsonl)")
-    return {"cvm_salvos": salvos, "cvm_falhas": falhas}
+    return {"cvm_salvos": salvos, "cvm_falhas": falhas, "cvm_desistidos": desistidos}
 
 
 if __name__ == "__main__":

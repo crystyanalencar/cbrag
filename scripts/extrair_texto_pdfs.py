@@ -16,9 +16,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from pypdf import PdfReader
-from pypdf.errors import FileNotDecryptedError, PdfReadError, WrongPasswordError
+from pypdf.errors import FileNotDecryptedError, WrongPasswordError
 
-from cbrag.arquivos import MAX_QUARENTENAS, QUARENTENA_SUBDIR, registrar_quarentena
+from cbrag.arquivos import MAX_QUARENTENAS, QUARENTENA_SUBDIR, limpar_quarentena, registrar_quarentena
 
 ROOT = Path(__file__).resolve().parents[1]
 PDF_DIRS = [ROOT / "data/pdfs", ROOT / "data/cvm", ROOT / "data/ri_central"]
@@ -30,7 +30,7 @@ OUT_DIR = ROOT / "data/corpus_pdf"
 # Depois de MAX_QUARENTENAS (cbrag/arquivos.py) o coletor desiste: o arquivo
 # vem quebrado da fonte. Cada quarentena vira uma linha em QUARENTENA_LOG.
 QUARENTENA_LOG = ROOT / "data/logs/quarentena.jsonl"
-# PDF protegido por senha também levanta PdfReadError, mas o arquivo está
+# PDF protegido por senha também levanta exceção do pypdf, mas o arquivo está
 # íntegro: rebaixar não muda nada, então fica como falha comum.
 _ERROS_DE_SENHA = (FileNotDecryptedError, WrongPasswordError)
 
@@ -80,9 +80,13 @@ def sem_trailer(caminho: Path) -> bool:
 
 
 def corrompido(caminho: Path, erro: Exception) -> bool:
+    """Corrompido = sem `%%EOF` no fim, qualquer que seja a exceção. Um
+    PdfReadError com o trailer intacto vem de estrutura interna que o pypdf
+    não lê (página ou fonte malformada): o arquivo está completo, rebaixar
+    traria os mesmos bytes, então fica como falha comum."""
     if isinstance(erro, _ERROS_DE_SENHA):
         return False
-    return isinstance(erro, PdfReadError) or sem_trailer(caminho)
+    return sem_trailer(caminho)
 
 
 def quarentenar(caminho: Path, erro: Exception) -> Path:
@@ -189,6 +193,7 @@ def main() -> dict:
                 print(f"VAZIO (provavelmente scan/imagem, sem OCR): {caminho.name}")
 
             destino.write_text(texto, encoding="utf-8")
+            limpar_quarentena(caminho)
             extraidos += 1
 
     for caminho in sorted((ROOT / "data/ri_central").glob("*.csv")):
