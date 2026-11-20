@@ -244,7 +244,6 @@ de sistema é resposta errada por recuperação errada, não exceção de códig
 
 - Fact-checker multi-agent (segunda passada auditando a resposta contra o
   chunk fonte).
-- Separar a etapa de ingestão para Airflow.
 
 ## Segurança
 
