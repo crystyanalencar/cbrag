@@ -10,14 +10,29 @@ internos de conselho/comitê.
 """
 import csv
 import io
+import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pypdf import PdfReader
+from pypdf.errors import FileNotDecryptedError, PdfReadError, WrongPasswordError
+
+from cbrag.arquivos import MAX_QUARENTENAS, QUARENTENA_SUBDIR, registrar_quarentena
 
 ROOT = Path(__file__).resolve().parents[1]
 PDF_DIRS = [ROOT / "data/pdfs", ROOT / "data/cvm", ROOT / "data/ri_central"]
 OUT_DIR = ROOT / "data/corpus_pdf"
+# PDF corrompido sai da pasta de origem pra `<pasta>/_quarentena/`: o glob
+# de extração não desce em subpasta, e o coletor, que só baixa o que ainda
+# não existe, volta a baixar o arquivo no próximo run. Sem isso o arquivo
+# quebrado ficava no lugar e falhava todo dia sem nunca ser baixado de novo.
+# Depois de MAX_QUARENTENAS (cbrag/arquivos.py) o coletor desiste: o arquivo
+# vem quebrado da fonte. Cada quarentena vira uma linha em QUARENTENA_LOG.
+QUARENTENA_LOG = ROOT / "data/logs/quarentena.jsonl"
+# PDF protegido por senha também levanta PdfReadError, mas o arquivo está
+# íntegro: rebaixar não muda nada, então fica como falha comum.
+_ERROS_DE_SENHA = (FileNotDecryptedError, WrongPasswordError)
 
 # Prefixo do slug de categoria (após a data) nos nomes gerados por
 # baixar_cvm.py. Só se aplica a data/cvm — data/pdfs não tem essas categorias.
@@ -48,6 +63,60 @@ def extrair_texto(caminho: Path) -> str:
     leitor = PdfReader(caminho)
     paginas = [pagina.extract_text() or "" for pagina in leitor.pages]
     return "\n\n".join(paginas).strip()
+
+
+def sem_trailer(caminho: Path) -> bool:
+    """PDF íntegro termina com `%%EOF` (às vezes seguido de espaço ou lixo
+    curto). Ausente no último KB = arquivo cortado ou com o fim zerado,
+    qualquer que seja a exceção que o pypdf levantou. Erro de I/O ao ler
+    (arquivo removido ou bloqueado no meio do run) não é prova de corrupção:
+    devolve False e o arquivo conta como falha comum."""
+    try:
+        with caminho.open("rb") as f:
+            f.seek(max(0, caminho.stat().st_size - 1024))
+            return b"%%EOF" not in f.read()
+    except OSError:
+        return False
+
+
+def corrompido(caminho: Path, erro: Exception) -> bool:
+    if isinstance(erro, _ERROS_DE_SENHA):
+        return False
+    return isinstance(erro, PdfReadError) or sem_trailer(caminho)
+
+
+def quarentenar(caminho: Path, erro: Exception) -> Path:
+    """Move `caminho` pra `<pasta>/_quarentena/`, com o mesmo nome (se o
+    arquivo volta quebrado da fonte, a cópia nova substitui a anterior em vez
+    de acumular), conta a quarentena e registra a falha em QUARENTENA_LOG.
+    Devolve o caminho novo.
+
+    OSError antes do move propaga (o arquivo continua no lugar). Depois do
+    move, falha no contador ou no log só gera aviso: o arquivo já saiu da
+    pasta de origem e não pode ser reportado como se estivesse lá."""
+    agora = datetime.now(timezone.utc)
+    pasta = caminho.parent / QUARENTENA_SUBDIR
+    pasta.mkdir(exist_ok=True)
+    destino = pasta / caminho.name
+    tamanho = caminho.stat().st_size
+    caminho.replace(destino)
+    try:
+        total = registrar_quarentena(caminho)
+        QUARENTENA_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with QUARENTENA_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "gravado_em": agora.isoformat(),
+                "arquivo": caminho.name,
+                "origem": caminho.parent.name,
+                "quarentena": str(destino.relative_to(ROOT)),
+                "bytes": tamanho,
+                "erro": f"{type(erro).__name__}: {erro}",
+                "quarentenas": total,
+                "desistido": total >= MAX_QUARENTENAS,
+            }, ensure_ascii=False) + "\n")
+    except OSError as erro_registro:
+        print(f"AVISO quarentena de {caminho.name} sem registro completo: {erro_registro}")
+    return destino
 
 
 _ADOTADA = {"S": "Sim", "N": "Não", "NA": "Não se aplica"}
@@ -84,7 +153,7 @@ def extrair_csv_governanca(caminho: Path) -> str:
 
 def main() -> dict:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    extraidos, pulados, falhas = 0, 0, 0
+    extraidos, pulados, falhas, quarentenados = 0, 0, 0, 0
 
     for pdf_dir in PDF_DIRS:
         for caminho in sorted(pdf_dir.glob("*.pdf")):
@@ -100,8 +169,20 @@ def main() -> dict:
             try:
                 texto = extrair_texto(caminho)
             except Exception as e:
-                print(f"FALHA {caminho.name}: {e}")
-                falhas += 1
+                if not corrompido(caminho, e):
+                    print(f"FALHA {caminho.name}: {e}")
+                    falhas += 1
+                    continue
+                # Quarentena não pode derrubar o run: sem permissão ou sem
+                # disco, o arquivo fica no lugar e conta como falha comum.
+                try:
+                    destino_q = quarentenar(caminho, e)
+                except OSError as erro_q:
+                    print(f"FALHA {caminho.name}: {e} (quarentena falhou: {erro_q})")
+                    falhas += 1
+                    continue
+                print(f"QUARENTENA {caminho.name}: {e} -> {destino_q.relative_to(ROOT)}")
+                quarentenados += 1
                 continue
 
             if not texto:
@@ -122,8 +203,17 @@ def main() -> dict:
             print(f"FALHA {caminho.name}: {e}")
             falhas += 1
 
-    print(f"Total: {extraidos} extraídos, {pulados} pulados (categoria excluída), {falhas} falharam")
-    return {"pdf_extraidos": extraidos, "pdf_pulados": pulados, "pdf_falhas": falhas}
+    print(
+        f"Total: {extraidos} extraídos, {pulados} pulados (categoria excluída), "
+        f"{falhas} falharam, {quarentenados} em quarentena (corrompidos; rebaixados no próximo run até "
+        f"{MAX_QUARENTENAS} quarentenas, ver data/logs/quarentena.jsonl)"
+    )
+    return {
+        "pdf_extraidos": extraidos,
+        "pdf_pulados": pulados,
+        "pdf_falhas": falhas,
+        "pdf_quarentena": quarentenados,
+    }
 
 
 if __name__ == "__main__":

@@ -46,6 +46,7 @@ class IngestState(BaseModel):
     pdf_extraidos: int = 0
     pdf_pulados: int = 0
     pdf_falhas: int = 0
+    pdf_quarentena: int = 0
     knowledge_html: int = 0
     knowledge_pdf: int = 0
     knowledge_pronto: bool = False

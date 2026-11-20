@@ -28,6 +28,7 @@ from pathlib import Path
 
 import requests
 
+from cbrag.arquivos import QUARENTENA_SUBDIR, desistido, gravar_atomico
 from cbrag.texto import sem_acento
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,7 +161,7 @@ def arquivar_planilha(doc: dict) -> str:
         return "repetida"
     entrega = (doc.get("file_published_date") or doc.get("file_date") or "")[:10] or date.today().isoformat()
     destino = PLANILHAS_DIR / f"{entrega}_{hash_curto}.xlsx"
-    destino.write_bytes(resp.content)
+    gravar_atomico(destino, resp.content)
     print(f"Planilha de Resultados arquivada: {destino.name} ({len(resp.content) // 1024} KB)")
     return "nova"
 
@@ -244,7 +245,9 @@ def preservar_entradas_em_disco(indice: dict) -> int:
     continua em disco e no corpus, mas sem entrada no índice perde categoria
     e origem: o FRE v7 virou documento genérico rotulado como CVM e saiu da
     categoria versionada. Mantém a entrada da rodada anterior de todo arquivo
-    que ainda está em disco e que a API não listou. Devolve quantas manteve."""
+    que ainda está em disco e que a API não listou, inclusive o que a extração
+    pôs em quarentena (sem a entrada, não haveria como saber de onde veio).
+    Devolve quantas manteve."""
     if not INDICE_FILE.exists():
         return 0
     anterior = json.loads(INDICE_FILE.read_text(encoding="utf-8"))
@@ -252,7 +255,11 @@ def preservar_entradas_em_disco(indice: dict) -> int:
     for chave, info in anterior.items():
         if chave in indice:
             continue
-        if any((PDF_DIR / f"{chave}{ext}").exists() for ext in (".pdf", ".csv")):
+        if any(
+            (pasta / f"{chave}{ext}").exists()
+            for pasta in (PDF_DIR, PDF_DIR / QUARENTENA_SUBDIR)
+            for ext in (".pdf", ".csv")
+        ):
             indice[chave] = info
             mantidas += 1
     return mantidas
@@ -283,7 +290,7 @@ def main() -> dict:
         print(f"RI central {ano}: {len(docs)} documentos")
         todos_docs.extend(docs)
 
-    salvos, pulados, falhas = 0, 0, 0
+    salvos, pulados, falhas, desistidos = 0, 0, 0, 0
     for doc in todos_docs:
         if eh_planilha_de_resultados(doc["file_title"]):
             arquivar_planilha(doc)
@@ -309,6 +316,9 @@ def main() -> dict:
         if destino.exists():
             salvos += 1
             continue
+        if desistido(destino):
+            desistidos += 1
+            continue
         try:
             resp = requests.get(doc["file_url"], headers=HEADERS, timeout=120)
             resp.raise_for_status()
@@ -318,7 +328,7 @@ def main() -> dict:
             continue
         if "csv" in resp.headers.get("Content-Type", "").lower():
             destino = destino.with_suffix(".csv")
-        destino.write_bytes(resp.content)
+        gravar_atomico(destino, resp.content)
         salvos += 1
         time.sleep(0.2)
 
@@ -326,7 +336,7 @@ def main() -> dict:
     if mantidas:
         print(f"Índice RI-central: {mantidas} entrada(s) de arquivo em disco que a API não lista mais, mantida(s)")
     salvar_indice(indice)
-    print(f"Total: {salvos} documentos salvos em {PDF_DIR}, {pulados} pulados (baixo valor), {falhas} falharam")
+    print(f"Total: {salvos} documentos salvos em {PDF_DIR}, {pulados} pulados (baixo valor), {falhas} falharam, {desistidos} desistidos (quarentena repetida, ver data/logs/quarentena.jsonl)")
     return {"ri_central_salvos": salvos, "ri_central_pulados": pulados, "ri_central_falhas": falhas}
 
 

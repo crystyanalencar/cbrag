@@ -11,6 +11,8 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 
+from cbrag.arquivos import desistido, gravar_atomico
+
 ROOT = Path(__file__).resolve().parents[1]
 CDX_FILES = [ROOT / "data/cdx/cdx_main.json", ROOT / "data/cdx/cdx_ri.json"]
 CORPUS_DIR = ROOT / "data/corpus"
@@ -121,7 +123,7 @@ def baixar_paginas(html_entries):
         if len(texto) < MIN_TEXT_LEN:
             pulados += 1
             continue
-        destino.write_text(f"URL: {original}\n\n{texto}", encoding="utf-8")
+        gravar_atomico(destino, f"URL: {original}\n\n{texto}".encode())
         salvos += 1
         time.sleep(0.3)
     print(f"Páginas: {salvos} salvas, {pulados} puladas (texto curto), {falhas} falharam")
@@ -130,11 +132,14 @@ def baixar_paginas(html_entries):
 
 def baixar_pdfs(pdf_entries):
     PDF_DIR.mkdir(parents=True, exist_ok=True)
-    salvos, falhas, falhas_seguidas = 0, 0, 0
+    salvos, falhas, falhas_seguidas, desistidos = 0, 0, 0, 0
     for timestamp, original in pdf_entries:
         destino = PDF_DIR / nome_arquivo(original, "pdf")
         if destino.exists():
             salvos += 1
+            continue
+        if desistido(destino):
+            desistidos += 1
             continue
         wayback_url = f"http://web.archive.org/web/{timestamp}id_/{original}"
         try:
@@ -152,10 +157,10 @@ def baixar_pdfs(pdf_entries):
                 break
             continue
         falhas_seguidas = 0
-        destino.write_bytes(resp.content)
+        gravar_atomico(destino, resp.content)
         salvos += 1
         time.sleep(0.3)
-    print(f"PDFs: {salvos} salvos, {falhas} falharam")
+    print(f"PDFs: {salvos} salvos, {falhas} falharam, {desistidos} desistidos (quarentena repetida, ver data/logs/quarentena.jsonl)")
     return {"pdfs_salvos": salvos, "pdfs_falhas": falhas}
 
 

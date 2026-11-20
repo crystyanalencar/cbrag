@@ -14,6 +14,8 @@ from pathlib import Path
 
 import requests
 
+from cbrag.arquivos import desistido, gravar_atomico
+
 ROOT = Path(__file__).resolve().parents[1]
 PDF_DIR = ROOT / "data/cvm"
 # Metadata estruturada do CSV IPE por documento (Categoria, Tipo, Especie,
@@ -86,11 +88,14 @@ def main() -> dict:
         todas_linhas.extend(linhas)
     salvar_indice(todas_linhas)
 
-    salvos, falhas = 0, 0
+    salvos, falhas, desistidos = 0, 0, 0
     for linha in todas_linhas:
         destino = PDF_DIR / nome_arquivo(linha)
         if destino.exists():
             salvos += 1
+            continue
+        if desistido(destino):
+            desistidos += 1
             continue
         try:
             resp = requests.get(linha["Link_Download"], headers=HEADERS, timeout=30)
@@ -99,11 +104,11 @@ def main() -> dict:
             print(f"FALHA {linha['Link_Download']}: {e}")
             falhas += 1
             continue
-        destino.write_bytes(resp.content)
+        gravar_atomico(destino, resp.content)
         salvos += 1
         time.sleep(0.2)
 
-    print(f"Total: {salvos} documentos salvos em {PDF_DIR}, {falhas} falharam")
+    print(f"Total: {salvos} documentos salvos em {PDF_DIR}, {falhas} falharam, {desistidos} desistidos (quarentena repetida, ver data/logs/quarentena.jsonl)")
     return {"cvm_salvos": salvos, "cvm_falhas": falhas}
 
 
