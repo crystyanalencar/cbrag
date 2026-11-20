@@ -4,10 +4,21 @@ services:
     # coleção concorrentemente (o modo embedded exige lock exclusivo de
     # arquivo) e suporta o volume atual da coleção, acima do limite
     # recomendado para o modo embedded (ver qdrant_store.py).
-    image: qdrant/qdrant:latest
+    # Versão fixa: atualizar o Qdrant migra o formato do storage sem
+    # caminho de volta, então a troca de versão deve ser deliberada.
+    image: qdrant/qdrant:v1.19.1
     volumes:
       - ./data/qdrant_server:/qdrant/storage
     restart: unless-stopped
+    healthcheck:
+      # A imagem não traz curl nem wget: a requisição ao /readyz sai pelo
+      # /dev/tcp do bash. Saudável só quando o Qdrant responde 200, não
+      # apenas quando o processo sobe.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -46,7 +57,8 @@ services:
       - ./data/fastembed_cache:/app/data/fastembed_cache
       - ./data/logs:/app/data/logs
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
     restart: unless-stopped
     deploy:
       resources:
@@ -82,4 +94,12 @@ services:
       - ./data/logs:/app/data/logs
       - ./tests:/app/tests:ro   # golden_retrieval.json, usado por scripts/avaliar_retrieval.py
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
+    deploy:
+      resources:
+        # Limite para que a extração de PDFs grandes não esgote a memória do
+        # host e derrube chat e qdrant, que rodam em paralelo.
+        limits:
+          cpus: "1.5"
+          memory: 3G
